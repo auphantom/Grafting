@@ -1,0 +1,12 @@
+{
+  "name": "grafting-e2e-test",
+  "private": true,
+  "description": "End-to-end test: a real Minecraft client (mineflayer) uses the Thread of Grafting on a live Paper server.",
+  "scripts": {
+    "test": "node e2e-test.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.39.0",
+    "rcon-client": "^4.2.5"
+  }
+}

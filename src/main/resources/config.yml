@@ -1,0 +1,14 @@
+# Grafting configuration
+
+# How many grafts a single player may keep alive at the same time.
+max-active-grafts: 5
+
+# How long each kind of graft lasts before the thread unravels (seconds).
+durations:
+  distance: 120   # block + block   -> two places become one
+  fate: 60        # being + being   -> harm meant for the first lands on the second
+  nature: 90      # block + being   -> the being takes on the block's nature
+  return: 300     # being + block   -> the being's death is grafted onto a journey home
+
+# Distance grafts refuse to connect places farther apart than this (blocks). -1 = unlimited.
+max-distance: 256
