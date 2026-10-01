@@ -1,5 +1,6 @@
 package io.github.auphantom.grafting.graft;
 
+import io.github.auphantom.grafting.Fx;
 import io.github.auphantom.grafting.GraftingPlugin;
 import io.github.auphantom.grafting.Text;
 import io.github.auphantom.grafting.anchor.Anchor;
@@ -10,6 +11,7 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
@@ -32,6 +34,25 @@ public final class GraftManager {
     private BukkitTask task;
     private int nextId = 1;
     private long tick;
+    private static int dealingDamage;
+
+    /**
+     * Runs damage that a graft deals on someone's behalf. While it runs, the "left-click a
+     * being to switch ability" handler stands aside, otherwise a caster holding the thread
+     * would cancel their own Supernova or redirected Fate.
+     */
+    public static void dealDamage(Runnable damage) {
+        dealingDamage++;
+        try {
+            damage.run();
+        } finally {
+            dealingDamage--;
+        }
+    }
+
+    public static boolean isDealingDamage() {
+        return dealingDamage > 0;
+    }
 
     public GraftManager(GraftingPlugin plugin) {
         this.plugin = plugin;
@@ -71,8 +92,8 @@ public final class GraftManager {
             grafts.remove(graft);
             return;
         }
-        burst(graft.first().center(), graft.color());
-        burst(graft.second().center(), graft.color());
+        Fx.burst(graft.first().center(), graft.color());
+        Fx.burst(graft.second().center(), graft.color());
         Location at = graft.second().center();
         at.getWorld().playSound(at, Sound.BLOCK_AMETHYST_BLOCK_RESONATE, 1f, 0.6f);
         at.getWorld().playSound(at, Sound.ENTITY_ILLUSIONER_MIRROR_MOVE, 0.8f, 1.4f);
@@ -103,6 +124,12 @@ public final class GraftManager {
             plugin.getLogger().log(Level.SEVERE, "Graft #" + graft.id() + " failed to end cleanly", ex);
         }
         if (reason != null) {
+            // The thread visibly frays apart at both ends.
+            for (Anchor end : new Anchor[]{graft.first(), graft.second()}) {
+                Location at = end.center();
+                Fx.spawn(at.getWorld(), Particle.DUST, at, Fx.scaled(30), 0.4, 0.4, 0.4, 0, Fx.dust(graft.color(), 0.8f));
+                Fx.spawn(at.getWorld(), Particle.SMOKE, at, Fx.scaled(10), 0.2, 0.2, 0.2, 0.02, null);
+            }
             Player owner = Bukkit.getPlayer(graft.owner());
             if (owner != null) {
                 Text.send(owner, "<gray>Your <light_purple>" + graft.name() + "</light_purple> graft <dark_gray>#"
@@ -126,6 +153,18 @@ public final class GraftManager {
         }
     }
 
+    /** Called by the listener whenever a mob picks a target. */
+    public void dispatchTarget(EntityTargetEvent event) {
+        for (Graft graft : new ArrayList<>(grafts)) {
+            if (graft.isSpent() || !graft.isIntact()) continue;
+            try {
+                graft.onTarget(event);
+            } catch (RuntimeException ex) {
+                plugin.getLogger().log(Level.SEVERE, "Graft #" + graft.id() + " failed to handle targeting", ex);
+            }
+        }
+    }
+
     private void tick() {
         tick++;
         for (Graft graft : new ArrayList<>(grafts)) {
@@ -143,7 +182,7 @@ public final class GraftManager {
                     end(graft, "was torn apart by an error");
                     continue;
                 }
-                if (tick % 4 == 0) drawThread(graft);
+                if (tick % 3 == 0 && graft.drawsThread()) drawThread(graft);
             }
         }
     }
@@ -153,40 +192,38 @@ public final class GraftManager {
         Anchor b = graft.second();
         Location from = a.center();
         Location to = b.center();
-        Particle.DustOptions dust = new Particle.DustOptions(graft.color(), 0.6f);
+        Color color = graft.color();
+        Color pale = color.mixColors(Color.WHITE);
+        Particle.DustOptions dust = Fx.dust(color, 0.7f);
         if (!from.getWorld().equals(to.getWorld())) {
-            from.getWorld().spawnParticle(Particle.DUST, from, 6, 0.3, 0.3, 0.3, 0, dust);
-            to.getWorld().spawnParticle(Particle.DUST, to, 6, 0.3, 0.3, 0.3, 0, dust);
+            Fx.spawn(from.getWorld(), Particle.DUST, from, Fx.scaled(12), 0.3, 0.3, 0.3, 0, dust);
+            Fx.spawn(to.getWorld(), Particle.DUST, to, Fx.scaled(12), 0.3, 0.3, 0.3, 0, dust);
             return;
         }
         double length = from.distance(to);
         if (length < 0.01) return;
+        double phase = tick * 0.35;
         if (length <= FULL_THREAD_MAX_LENGTH) {
-            line(from, to, length, dust);
-            // A brighter mote travelling along the thread, so you can see which way it "flows".
-            double phase = ((tick / 4) % 10) / 10.0;
-            Location mote = from.clone().add(to.toVector().subtract(from.toVector()).multiply(phase));
-            from.getWorld().spawnParticle(Particle.END_ROD, mote, 1, 0, 0, 0, 0);
+            // Two twisting strands around a faint core, like a real braided thread.
+            Fx.helix(from, to, color, pale, 0.14, phase);
+            Fx.line(from, to, Fx.dust(pale, 0.3f), 0.5);
+            // Bright motes travelling along the thread, so you can see which way it "flows".
+            Vector span = to.toVector().subtract(from.toVector());
+            for (int i = 0; i < 3; i++) {
+                double t = ((tick / 3.0) / 12.0 + i / 3.0) % 1.0;
+                Location mote = from.clone().add(span.clone().multiply(t));
+                Fx.spawn(mote.getWorld(), Particle.END_ROD, mote, 1, 0, 0, 0, 0, null);
+            }
         } else {
             // Too long to draw: show two short stubs pointing at each other.
             Vector dir = to.toVector().subtract(from.toVector()).normalize().multiply(STUB_LENGTH);
-            line(from, from.clone().add(dir), STUB_LENGTH, dust);
-            line(to, to.clone().subtract(dir), STUB_LENGTH, dust);
+            Fx.helix(from, from.clone().add(dir), color, pale, 0.14, phase);
+            Fx.helix(to, to.clone().subtract(dir), color, pale, 0.14, phase);
         }
-    }
-
-    private static void line(Location from, Location to, double length, Particle.DustOptions dust) {
-        int points = (int) Math.min(120, Math.ceil(length / 0.4));
-        Vector step = to.toVector().subtract(from.toVector()).multiply(1.0 / points);
-        Location cursor = from.clone();
-        for (int i = 0; i <= points; i++) {
-            from.getWorld().spawnParticle(Particle.DUST, cursor, 1, 0, 0, 0, 0, dust);
-            cursor.add(step);
+        // Small knots where the thread is tied.
+        if (tick % 6 == 0) {
+            Fx.spawn(from.getWorld(), Particle.DUST, from, Fx.scaled(4), 0.15, 0.15, 0.15, 0, Fx.dust(color, 1f));
+            Fx.spawn(to.getWorld(), Particle.DUST, to, Fx.scaled(4), 0.15, 0.15, 0.15, 0, Fx.dust(color, 1f));
         }
-    }
-
-    static void burst(Location at, Color color) {
-        at.getWorld().spawnParticle(Particle.DUST, at, 30, 0.4, 0.4, 0.4, 0, new Particle.DustOptions(color, 1.2f));
-        at.getWorld().spawnParticle(Particle.REVERSE_PORTAL, at, 25, 0.3, 0.3, 0.3, 0.05);
     }
 }

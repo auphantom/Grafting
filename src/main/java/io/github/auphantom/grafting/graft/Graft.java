@@ -3,6 +3,7 @@ package io.github.auphantom.grafting.graft;
 import io.github.auphantom.grafting.anchor.Anchor;
 import org.bukkit.Color;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityTargetEvent;
 
 import java.util.UUID;
 
@@ -15,28 +16,39 @@ import java.util.UUID;
 public abstract class Graft {
 
     private final int id;
+    private final Mode mode;
     private final UUID owner;
     private final Anchor first;
     private final Anchor second;
     private final long expiresAt;
     private boolean spent;
 
-    protected Graft(int id, UUID owner, Anchor first, Anchor second, long expiresAt) {
+    protected Graft(int id, Mode mode, UUID owner, Anchor first, Anchor second, long expiresAt) {
         this.id = id;
+        this.mode = mode;
         this.owner = owner;
         this.first = first;
         this.second = second;
         this.expiresAt = expiresAt;
     }
 
-    /** Name of the concept being tampered with, e.g. "Distance". */
-    public abstract String name();
+    /** Name shown to players. Defaults to the mode's name. */
+    public String name() {
+        return mode.display();
+    }
 
     /** One line explaining what this particular graft does, shown to the owner. */
     public abstract String summary();
 
     /** Colour of the thread drawn between the two ends. */
-    public abstract Color color();
+    public Color color() {
+        return mode.color();
+    }
+
+    /** Whether the manager should draw the thread between the ends this tick. */
+    public boolean drawsThread() {
+        return true;
+    }
 
     /** Called once, right after the graft is registered. */
     public void onStart() {
@@ -58,6 +70,10 @@ public abstract class Graft {
     public void onLateDamage(EntityDamageEvent event) {
     }
 
+    /** Any mob choosing a target while this graft lives. */
+    public void onTarget(EntityTargetEvent event) {
+    }
+
     /** One-shot grafts call this once their effect has been used up. */
     protected final void spend() {
         spent = true;
@@ -69,6 +85,10 @@ public abstract class Graft {
 
     public final int id() {
         return id;
+    }
+
+    public final Mode mode() {
+        return mode;
     }
 
     public final UUID owner() {
@@ -87,7 +107,8 @@ public abstract class Graft {
         return expiresAt;
     }
 
-    public final boolean isIntact() {
+    /** Both ends still exist. Grafts that consume one of their ends on purpose override this. */
+    public boolean isIntact() {
         return first.isIntact() && second.isIntact();
     }
 }

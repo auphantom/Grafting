@@ -28,24 +28,14 @@ public final class FateGraft extends Graft {
     private final EntityAnchor to;
 
     public FateGraft(int id, UUID owner, EntityAnchor from, EntityAnchor to, long expiresAt) {
-        super(id, owner, from, to, expiresAt);
+        super(id, Mode.FATE, owner, from, to, expiresAt);
         this.from = from;
         this.to = to;
     }
 
     @Override
-    public String name() {
-        return "Fate";
-    }
-
-    @Override
     public String summary() {
         return "Harm meant for " + from.describe() + " now finds " + to.describe() + " instead.";
-    }
-
-    @Override
-    public Color color() {
-        return Color.fromRGB(0xc81e3c);
     }
 
     @Override
@@ -61,7 +51,7 @@ public final class FateGraft extends Graft {
         REDIRECTING.add(victim.getUniqueId());
         try {
             victim.setNoDamageTicks(0);
-            victim.damage(damage, event.getDamageSource());
+            GraftManager.dealDamage(() -> victim.damage(damage, event.getDamageSource()));
         } finally {
             REDIRECTING.remove(victim.getUniqueId());
         }

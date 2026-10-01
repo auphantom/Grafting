@@ -3,12 +3,42 @@
 # How many grafts a single player may keep alive at the same time.
 max-active-grafts: 5
 
+# How far away (blocks) right-click can tie the thread to what you are looking at.
+tie-range: 48
+
 # How long each kind of graft lasts before the thread unravels (seconds).
 durations:
-  distance: 120   # block + block   -> two places become one
-  fate: 60        # being + being   -> harm meant for the first lands on the second
-  nature: 90      # block + being   -> the being takes on the block's nature
-  return: 300     # being + block   -> the being's death is grafted onto a journey home
+  distance: 120   # Place + Place      two places become one
+  fate: 60        # Being + Being      harm meant for the first lands on the second
+  nature: 90      # Place + Being      the being takes on the block's nature
+  return: 300     # Being + Place      the being's next death becomes a trip home
+  exchange: 60    # Being + Being      the two swap places, and again whenever the first is struck
+  enmity: 60      # Being + Being      hostility toward the first is aimed at the second
+  gravity: 20     # Being + Place      'down' points at the block
+  puppet: 30      # Being + Being      the second mirrors the first's movements
 
 # Distance grafts refuse to connect places farther apart than this (blocks). -1 = unlimited.
 max-distance: 256
+
+# Place + Anything: the death of a star grafted onto the target.
+supernova:
+  radius: 10          # blast radius in blocks
+  max-damage: 30      # damage at the centre, falling off to 0 at the edge
+  break-blocks: false # whether the detonation also destroys terrain
+
+particles:
+  # Multiplier for every particle effect. 0.5 = half, 2.0 = double (max 4.0).
+  density: 1.0
+
+# The texture pack that gives every ability its own icon.
+# By default the plugin hosts it itself on a small built-in web server.
+resource-pack:
+  enabled: true
+  # Set custom-models to false to keep the plain string look without a pack.
+  custom-models: true
+  required: false
+  port: 8164
+  # Address players use to reach this server. Leave empty to use server-ip, or localhost.
+  public-host: ""
+  # Or host grafting-pack.zip yourself and put its URL here (port/public-host are then ignored).
+  url: ""

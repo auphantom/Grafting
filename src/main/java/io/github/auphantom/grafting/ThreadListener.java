@@ -5,126 +5,286 @@ import io.github.auphantom.grafting.anchor.BlockAnchor;
 import io.github.auphantom.grafting.anchor.EntityAnchor;
 import io.github.auphantom.grafting.graft.GraftFactory;
 import io.github.auphantom.grafting.graft.GraftManager;
+import io.github.auphantom.grafting.graft.Mode;
+import org.bukkit.Bukkit;
+import org.bukkit.FluidCollisionMode;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.util.RayTraceResult;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Turns clicks with the Thread of Grafting into anchors, and pairs of anchors into grafts.
- * Also forwards damage events to the live grafts.
+ * Turns clicks with the Thread of Grafting into mode switches, anchors, and grafts.
+ * <pre>
+ *   Left-click               next ability
+ *   Sneak + left-click       ability menu
+ *   Right-click              tie the thread to what you are looking at (up to tie-range blocks away)
+ *                            ... or to yourself, if you are looking at nothing
+ *   Sneak + right-click      tie the thread to yourself
+ * </pre>
+ * Also forwards damage and targeting events to the live grafts.
  */
 public final class ThreadListener implements Listener {
 
     /** How long a half-tied thread waits for its second end (ticks). */
     private static final long PENDING_TIMEOUT = 30 * 20;
 
-    private record Pending(Anchor anchor, long since) {
+    private record Pending(Mode mode, Anchor anchor, long since) {
     }
 
+    private final GraftingPlugin plugin;
     private final GraftManager manager;
     private final GraftFactory factory;
+    private AbilityMenu menu;
     private final Map<UUID, Pending> pending = new HashMap<>();
-    /** Last tick each player clicked an entity: the client follows that with a stray "use item" click. */
-    private final Map<UUID, Long> lastEntityClick = new HashMap<>();
+    /** Last tick each player used the thread: one physical click can produce several events. */
+    private final Map<UUID, Long> lastUse = new HashMap<>();
+    private final Map<UUID, Long> lastSwitch = new HashMap<>();
+    /**
+     * Left-clicks in the air, waiting to be confirmed. Clients send an arm swing together with
+     * every right-click (some before the use packet, some after), and the server reports that
+     * swing as a left-click in the air. Such a click only counts if no right-click lands within
+     * a couple of ticks on either side of it.
+     */
+    private final Map<UUID, Long> pendingSwing = new HashMap<>();
 
-    public ThreadListener(GraftManager manager, GraftFactory factory) {
+    public ThreadListener(GraftingPlugin plugin, GraftManager manager, GraftFactory factory) {
+        this.plugin = plugin;
         this.manager = manager;
         this.factory = factory;
     }
 
-    // ------------------------------------------------------------------ selecting
+    void setMenu(AbilityMenu menu) {
+        this.menu = menu;
+    }
+
+    // ------------------------------------------------------------------ switching abilities
+
+    /** Switches the thread in {@code hand} to {@code mode}, with feedback. Lets go of a half-tied thread. */
+    public void select(Player player, ItemStack hand, Mode mode) {
+        ThreadItem.setMode(hand, mode);
+        if (pending.remove(player.getUniqueId()) != null) {
+            Text.send(player, "<gray>You let go of the loose thread to change ability.");
+        }
+        Text.actionBar(player, "<dark_gray>« </dark_gray>" + mode.tag() + "<b>" + mode.display()
+                + "</b><dark_gray> »  <gray>" + mode.shape());
+        float pitch = 0.7f + 0.1f * mode.ordinal();
+        player.playSound(player, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.9f, pitch);
+        player.playSound(player, Sound.ITEM_BOOK_PAGE_TURN, 0.7f, 1.2f);
+        Location feet = player.getLocation().add(0, 0.1, 0);
+        Fx.ring(feet, 0.9, Particle.DUST, Fx.dust(mode.color(), 1f), 30);
+        Fx.ring(feet.clone().add(0, 0.9, 0), 0.6, Particle.DUST, Fx.dust(mode.color().mixColors(org.bukkit.Color.WHITE), 0.7f), 20);
+        Fx.spawn(player.getWorld(), Particle.ENCHANT, player.getLocation().add(0, 1, 0), Fx.scaled(25), 0.4, 0.6, 0.4, 0.6, null);
+    }
+
+    private boolean debounceSwitch(Player player) {
+        long now = manager.currentTick();
+        Long last = lastSwitch.put(player.getUniqueId(), now);
+        return last != null && now - last < 3;
+    }
+
+    private void leftClick(Player player, ItemStack hand) {
+        if (debounceSwitch(player)) return;
+        if (player.isSneaking()) {
+            menu.open(player);
+        } else {
+            select(player, hand, ThreadItem.mode(hand).next());
+        }
+    }
+
+    // ------------------------------------------------------------------ clicks
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND || !ThreadItem.is(event.getItem())) return;
         Player player = event.getPlayer();
         Action action = event.getAction();
-        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
-        event.setCancelled(true); // never place the string as tripwire, never open chests, etc.
+        if (action == Action.PHYSICAL) return;
+        event.setCancelled(true); // never place tripwire, open chests, or start breaking blocks
         if (!player.hasPermission("grafting.use")) return;
 
-        if (action == Action.RIGHT_CLICK_BLOCK) {
-            Block block = event.getClickedBlock();
-            if (block != null) tie(player, BlockAnchor.of(block));
-            return;
-        }
-        Long last = lastEntityClick.get(player.getUniqueId());
-        if (last != null && manager.currentTick() - last <= 2) return;
-        if (player.isSneaking()) {
-            if (pending.remove(player.getUniqueId()) != null) {
-                Text.send(player, "<gray>You let go of the thread.");
-                player.playSound(player, Sound.BLOCK_WOOL_BREAK, 1f, 0.8f);
+        if (action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK) {
+            if (action == Action.LEFT_CLICK_AIR) {
+                Long used = lastUse.get(player.getUniqueId());
+                if (used == null || manager.currentTick() - used > 3) {
+                    pendingSwing.put(player.getUniqueId(), manager.currentTick());
+                }
+            } else {
+                leftClick(player, event.getItem());
             }
             return;
         }
-        tie(player, new EntityAnchor(player));
+        pendingSwing.remove(player.getUniqueId());
+        if (recentlyUsed(player)) return;
+        Mode mode = ThreadItem.mode(event.getItem());
+        if (player.isSneaking()) {
+            tie(player, mode, new EntityAnchor(player));
+            return;
+        }
+        if (action == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null) {
+            tie(player, mode, BlockAnchor.of(event.getClickedBlock()));
+            return;
+        }
+        tie(player, mode, lookTarget(player));
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onInteractEntity(PlayerInteractEntityEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
         Player player = event.getPlayer();
-        if (!ThreadItem.is(player.getInventory().getItemInMainHand())) return;
-        if (!(event.getRightClicked() instanceof LivingEntity target)) return;
+        ItemStack hand = player.getInventory().getItemInMainHand();
+        if (!ThreadItem.is(hand)) return;
         event.setCancelled(true); // no leashing, trading, or feeding with the thread
-        if (!player.hasPermission("grafting.use")) return;
-        lastEntityClick.put(player.getUniqueId(), manager.currentTick());
-        tie(player, new EntityAnchor(target));
+        pendingSwing.remove(player.getUniqueId());
+        if (!player.hasPermission("grafting.use") || recentlyUsed(player)) return;
+        Mode mode = ThreadItem.mode(hand);
+        if (player.isSneaking()) {
+            tie(player, mode, new EntityAnchor(player));
+        } else if (event.getRightClicked() instanceof LivingEntity target) {
+            tie(player, mode, new EntityAnchor(target));
+        }
     }
 
-    private void tie(Player player, Anchor anchor) {
+    /** Left-clicking a being with the thread switches ability instead of punching it. */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onPunch(EntityDamageByEntityEvent event) {
+        if (GraftManager.isDealingDamage()) return;
+        EntityDamageEvent.DamageCause cause = event.getCause();
+        if (cause != EntityDamageEvent.DamageCause.ENTITY_ATTACK
+                && cause != EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) return;
+        if (!(event.getDamager() instanceof Player player)) return;
+        ItemStack hand = player.getInventory().getItemInMainHand();
+        if (!ThreadItem.is(hand)) return;
+        event.setCancelled(true);
+        if (player.hasPermission("grafting.use")) leftClick(player, hand);
+    }
+
+    /** Creative players would otherwise break the block they left-click to switch ability. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onBreak(BlockBreakEvent event) {
+        if (ThreadItem.is(event.getPlayer().getInventory().getItemInMainHand())) event.setCancelled(true);
+    }
+
+    /** Hint the controls whenever the thread is picked up in the hotbar. */
+    @EventHandler
+    public void onHold(PlayerItemHeldEvent event) {
+        ItemStack item = event.getPlayer().getInventory().getItem(event.getNewSlot());
+        if (!ThreadItem.is(item)) return;
+        Mode mode = ThreadItem.mode(item);
+        Text.actionBar(event.getPlayer(), mode.tag() + "<b>" + mode.display()
+                + "</b> <dark_gray>·</dark_gray> <gray>left-click to switch, sneak + left-click for the menu");
+    }
+
+    private boolean recentlyUsed(Player player) {
+        long now = manager.currentTick();
+        Long last = lastUse.put(player.getUniqueId(), now);
+        return last != null && now - last <= 2;
+    }
+
+    /** What the player is looking at, up to {@code tie-range} blocks away. Nothing -> themselves. */
+    private Anchor lookTarget(Player player) {
+        double range = plugin.getConfig().getDouble("tie-range", 48);
+        Location eye = player.getEyeLocation();
+        RayTraceResult hit = player.getWorld().rayTrace(eye, eye.getDirection(), range, FluidCollisionMode.NEVER,
+                true, 0.2, e -> e instanceof LivingEntity && !e.equals(player)
+                        && !(e instanceof Player p && p.getGameMode() == GameMode.SPECTATOR));
+        if (hit != null) {
+            Entity entity = hit.getHitEntity();
+            if (entity instanceof LivingEntity living) return new EntityAnchor(living);
+            Block block = hit.getHitBlock();
+            if (block != null) return BlockAnchor.of(block);
+        }
+        return new EntityAnchor(player);
+    }
+
+    // ------------------------------------------------------------------ tying
+
+    private void tie(Player player, Mode mode, Anchor anchor) {
         UUID id = player.getUniqueId();
         Pending first = pending.get(id);
         long now = manager.currentTick();
 
-        if (first == null || now - first.since() > PENDING_TIMEOUT || !first.anchor().isIntact()) {
-            pending.put(id, new Pending(anchor, now));
-            Text.send(player, "<gray>Thread tied to <white>" + Text.esc(anchor.describe())
-                    + "</white>. Now choose what to graft it onto.");
-            sparkle(anchor.center());
+        if (first == null || first.mode() != mode || now - first.since() > PENDING_TIMEOUT || !first.anchor().isIntact()) {
+            if (!GraftFactory.accepts(mode.first(), anchor)) {
+                fail(player, mode.tag() + mode.display() + "</color> <gray>starts from " + mode.first().article()
+                        + ", not " + Text.esc(anchor.describe()) + ".");
+                return;
+            }
+            pending.put(id, new Pending(mode, anchor, now));
+            Text.send(player, mode.tag() + mode.display() + "<dark_gray>:</dark_gray> <gray>thread tied to <white>"
+                    + Text.esc(anchor.describe()) + "</white>. Now choose " + mode.second().article() + ".");
+            Location at = anchor.center();
+            Fx.spawn(at.getWorld(), Particle.ENCHANT, at, Fx.scaled(50), 0.5, 0.5, 0.5, 0.8, null);
+            Fx.sphere(at, 0.7, Particle.DUST, Fx.dust(mode.color(), 0.8f), 30);
+            Fx.line(player.getEyeLocation().subtract(0, 0.4, 0), at, Fx.dust(mode.color(), 0.6f), 0.25);
             player.playSound(player, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1f, 1.4f);
             return;
         }
         if (first.anchor().sameAs(anchor)) {
-            Text.send(player, "<gray>The thread is already tied there. <dark_gray>(Sneak + right-click the air to let go.)");
+            Text.send(player, "<gray>The thread is already tied there. <dark_gray>(Left-click to switch ability and let go.)");
+            return;
+        }
+        if (!GraftFactory.accepts(mode.second(), anchor)) {
+            fail(player, mode.tag() + mode.display() + "</color> <gray>must end on " + mode.second().article()
+                    + ", not " + Text.esc(anchor.describe()) + ".");
             return;
         }
 
         pending.remove(id);
-        GraftFactory.Result result = factory.create(id, first.anchor(), anchor);
+        GraftFactory.Result result = factory.create(id, mode, first.anchor(), anchor);
         if (result.graft() == null) {
-            Text.send(player, "<red>" + Text.esc(result.error()));
-            player.playSound(player, Sound.BLOCK_WOOL_BREAK, 1f, 0.6f);
+            fail(player, "<red>" + Text.esc(result.error()));
             return;
         }
         manager.add(result.graft());
-        Text.send(player, "<light_purple>" + result.graft().name() + "</light_purple> <dark_gray>#"
+        Text.send(player, mode.tag() + result.graft().name() + "</color> <dark_gray>#"
                 + result.graft().id() + "</dark_gray> <gray>"
-                + Text.esc(first.anchor().describe()) + " <dark_purple>⟶</dark_purple> " + Text.esc(anchor.describe()));
+                + Text.esc(first.anchor().describe()) + " " + mode.tag() + "⟶</color> " + Text.esc(anchor.describe()));
         Text.send(player, "<dark_gray><i>" + Text.esc(result.graft().summary()));
     }
 
-    /** Called from the plugin's tick: reminds players of a half-tied thread and lets it time out. */
+    private static void fail(Player player, String message) {
+        Text.send(player, message);
+        player.playSound(player, Sound.BLOCK_WOOL_BREAK, 1f, 0.6f);
+    }
+
+    /** Called every tick: reminds players of a half-tied thread and lets it time out. */
     void tickPending() {
         long now = manager.currentTick();
+        pendingSwing.entrySet().removeIf(entry -> {
+            if (now - entry.getValue() < 2) return false;
+            Player player = Bukkit.getPlayer(entry.getKey());
+            if (player != null) {
+                ItemStack hand = player.getInventory().getItemInMainHand();
+                if (ThreadItem.is(hand)) leftClick(player, hand);
+            }
+            return true;
+        });
         pending.entrySet().removeIf(entry -> {
-            Player player = org.bukkit.Bukkit.getPlayer(entry.getKey());
+            Player player = Bukkit.getPlayer(entry.getKey());
             Pending p = entry.getValue();
             if (player == null) return true;
             if (now - p.since() > PENDING_TIMEOUT || !p.anchor().isIntact()) {
@@ -132,38 +292,40 @@ public final class ThreadListener implements Listener {
                 return true;
             }
             if (now % 10 == 0) {
-                Text.actionBar(player, "<light_purple>Thread of Grafting</light_purple> <dark_gray>»</dark_gray> <gray>"
-                        + Text.esc(p.anchor().describe()) + " <dark_purple>⟶</dark_purple> <white>?");
-                drawLoose(player, p.anchor());
+                Text.actionBar(player, p.mode().tag() + "<b>" + p.mode().display() + "</b> <dark_gray>»</dark_gray> <gray>"
+                        + Text.esc(p.anchor().describe()) + " " + p.mode().tag() + "⟶</color> <white>?");
             }
+            if (now % 3 == 0) drawLoose(player, p);
             return false;
         });
     }
 
-    /** A faint thread from the tied end to the player's hand. */
-    private static void drawLoose(Player player, Anchor anchor) {
-        Location from = anchor.center();
-        Location to = player.getEyeLocation().subtract(0, 0.4, 0);
-        if (!from.getWorld().equals(to.getWorld()) || from.distanceSquared(to) > 48 * 48) return;
-        Particle.DustOptions dust = new Particle.DustOptions(org.bukkit.Color.fromRGB(0xd9ccff), 0.4f);
+    /** A loose helix from the tied end to the player's hand. Only the holder sees it. */
+    private static void drawLoose(Player player, Pending p) {
+        Location from = p.anchor().center();
+        Location to = player.getEyeLocation().subtract(0, 0.4, 0).add(player.getLocation().getDirection().multiply(0.5));
+        if (!from.getWorld().equals(to.getWorld()) || from.distanceSquared(to) > 64 * 64) return;
         double length = from.distance(to);
-        int points = (int) Math.max(1, Math.ceil(length / 0.6));
+        int points = (int) Math.max(2, Math.ceil(length / 0.3));
         org.bukkit.util.Vector step = to.toVector().subtract(from.toVector()).multiply(1.0 / points);
+        Particle.DustOptions dust = Fx.dust(p.mode().color(), 0.45f);
         Location cursor = from.clone();
         for (int i = 0; i <= points; i++) {
-            player.spawnParticle(Particle.DUST, cursor, 1, 0, 0, 0, 0, dust);
+            // A slight sag, like a real slack thread.
+            double t = (double) i / points;
+            Location at = cursor.clone().subtract(0, Math.sin(Math.PI * t) * Math.min(1.5, length * 0.06), 0);
+            player.spawnParticle(Particle.DUST, at, 1, 0, 0, 0, 0, dust);
             cursor.add(step);
         }
     }
 
-    private static void sparkle(Location at) {
-        at.getWorld().spawnParticle(Particle.ENCHANT, at, 30, 0.4, 0.4, 0.4, 0.5);
-    }
-
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        pending.remove(event.getPlayer().getUniqueId());
-        lastEntityClick.remove(event.getPlayer().getUniqueId());
+        UUID id = event.getPlayer().getUniqueId();
+        pending.remove(id);
+        lastUse.remove(id);
+        lastSwitch.remove(id);
+        pendingSwing.remove(id);
     }
 
     // ------------------------------------------------------------------ grafts reacting to the world
@@ -176,5 +338,10 @@ public final class ThreadListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onLateDamage(EntityDamageEvent event) {
         manager.dispatchDamage(event, true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onTarget(EntityTargetEvent event) {
+        manager.dispatchTarget(event);
     }
 }

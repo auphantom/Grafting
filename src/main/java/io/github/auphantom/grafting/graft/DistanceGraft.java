@@ -33,24 +33,14 @@ public final class DistanceGraft extends Graft {
     private final Map<UUID, BlockAnchor> arrived = new HashMap<>();
 
     public DistanceGraft(int id, UUID owner, BlockAnchor a, BlockAnchor b, long expiresAt) {
-        super(id, owner, a, b, expiresAt);
+        super(id, Mode.DISTANCE, owner, a, b, expiresAt);
         this.a = a;
         this.b = b;
     }
 
     @Override
-    public String name() {
-        return "Distance";
-    }
-
-    @Override
     public String summary() {
         return "The distance between these two places is now zero. Step on one, arrive on the other.";
-    }
-
-    @Override
-    public Color color() {
-        return Color.fromRGB(0x9b6bff);
     }
 
     @Override

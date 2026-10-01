@@ -2,23 +2,33 @@ package io.github.auphantom.grafting;
 
 import io.github.auphantom.grafting.graft.Graft;
 import io.github.auphantom.grafting.graft.GraftManager;
+import io.github.auphantom.grafting.graft.Mode;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** {@code /graft give|list|sever|help} */
+/** {@code /graft give|mode|menu|list|sever|pack|help} */
 public final class GraftCommand implements TabExecutor {
 
-    private final GraftManager manager;
+    private static final List<String> SUBS = List.of("give", "mode", "menu", "list", "sever", "pack", "help");
 
-    public GraftCommand(GraftManager manager) {
+    private final GraftManager manager;
+    private final ThreadListener threads;
+    private final AbilityMenu menu;
+    private final PackServer pack;
+
+    public GraftCommand(GraftManager manager, ThreadListener threads, AbilityMenu menu, PackServer pack) {
         this.manager = manager;
+        this.threads = threads;
+        this.menu = menu;
+        this.pack = pack;
     }
 
     @Override
@@ -26,11 +36,24 @@ public final class GraftCommand implements TabExecutor {
         String sub = args.length == 0 ? "help" : args[0].toLowerCase();
         switch (sub) {
             case "give" -> give(sender, args);
+            case "mode" -> mode(sender, args);
+            case "menu" -> {
+                if (sender instanceof Player p && holding(p)) menu.open(p);
+            }
             case "list" -> list(sender);
             case "sever" -> sever(sender, args);
+            case "pack" -> {
+                if (sender instanceof Player p) pack.offer(p);
+            }
             default -> help(sender, label);
         }
         return true;
+    }
+
+    private boolean holding(Player player) {
+        if (ThreadItem.is(player.getInventory().getItemInMainHand())) return true;
+        Text.send(player, "<red>Hold the Thread of Grafting first.");
+        return false;
     }
 
     private void give(CommandSender sender, String[] args) {
@@ -51,10 +74,26 @@ public final class GraftCommand implements TabExecutor {
             Text.send(sender, "<red>Usage: /graft give <player>");
             return;
         }
-        Map<Integer, ?> leftover = target.getInventory().addItem(ThreadItem.create());
-        if (!leftover.isEmpty()) target.getWorld().dropItem(target.getLocation(), ThreadItem.create());
-        Text.send(target, "<gray>A <light_purple>Thread of Grafting</light_purple> appears in your hand.");
+        ItemStack thread = ThreadItem.create(Mode.DISTANCE);
+        Map<Integer, ?> leftover = target.getInventory().addItem(thread);
+        if (!leftover.isEmpty()) target.getWorld().dropItem(target.getLocation(), thread);
+        Text.send(target, "<gray>A <light_purple>Thread of Grafting</light_purple> appears in your hand. "
+                + "<dark_gray>(Left-click to switch ability.)");
         if (sender != target) Text.send(sender, "<gray>Gave the thread to " + Text.esc(target.getName()) + ".");
+    }
+
+    private void mode(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player) || !holding(player)) return;
+        if (args.length < 2) {
+            Text.send(sender, "<gray>Abilities: " + String.join(", ", modeIds()));
+            return;
+        }
+        Mode mode = Mode.byId(args[1]);
+        if (mode == null) {
+            Text.send(sender, "<red>Unknown ability. Try: " + String.join(", ", modeIds()));
+            return;
+        }
+        threads.select(player, player.getInventory().getItemInMainHand(), mode);
     }
 
     private void list(CommandSender sender) {
@@ -70,8 +109,8 @@ public final class GraftCommand implements TabExecutor {
         Text.send(sender, "<gray>Your grafts:");
         for (Graft graft : owned) {
             long secondsLeft = Math.max(0, (graft.expiresAt() - manager.currentTick()) / 20);
-            sender.sendMessage(Text.mm(" <dark_gray>#" + graft.id() + "</dark_gray> <light_purple>" + graft.name()
-                    + "</light_purple> <gray>" + Text.esc(graft.first().describe()) + " <dark_purple>⟶</dark_purple> "
+            sender.sendMessage(Text.mm(" <dark_gray>#" + graft.id() + "</dark_gray> " + graft.mode().tag() + graft.name()
+                    + "</color> <gray>" + Text.esc(graft.first().describe()) + " " + graft.mode().tag() + "⟶</color> "
                     + Text.esc(graft.second().describe()) + " <dark_gray>(" + secondsLeft + "s)"));
         }
     }
@@ -106,30 +145,39 @@ public final class GraftCommand implements TabExecutor {
     private void help(CommandSender sender, String label) {
         Text.send(sender, "<gray>Reassembly: connect two things that should never touch.");
         sender.sendMessage(Text.mm(" <light_purple>/" + label + " give [player]</light_purple> <dark_gray>-</dark_gray> <gray>get the Thread of Grafting"));
+        sender.sendMessage(Text.mm(" <light_purple>/" + label + " mode <ability></light_purple> <dark_gray>-</dark_gray> <gray>switch ability"));
+        sender.sendMessage(Text.mm(" <light_purple>/" + label + " menu</light_purple> <dark_gray>-</dark_gray> <gray>open the ability menu"));
         sender.sendMessage(Text.mm(" <light_purple>/" + label + " list</light_purple> <dark_gray>-</dark_gray> <gray>see your active grafts"));
         sender.sendMessage(Text.mm(" <light_purple>/" + label + " sever [id|all]</light_purple> <dark_gray>-</dark_gray> <gray>cut a graft"));
-        sender.sendMessage(Text.mm(" <gray>Right-click two things with the thread. The <white>first</white> is grafted <white>onto</white> the second:"));
-        sender.sendMessage(Text.mm("  <dark_purple>Place + Place</dark_purple> <gray>the distance between them becomes zero"));
-        sender.sendMessage(Text.mm("  <dark_purple>Being + Being</dark_purple> <gray>harm meant for the first finds the second"));
-        sender.sendMessage(Text.mm("  <dark_purple>Place + Being</dark_purple> <gray>the being takes on the block's nature"));
-        sender.sendMessage(Text.mm("  <dark_purple>Being + Place</dark_purple> <gray>the being's next death becomes a trip home"));
+        sender.sendMessage(Text.mm(" <light_purple>/" + label + " pack</light_purple> <dark_gray>-</dark_gray> <gray>re-send the texture pack"));
+        sender.sendMessage(Text.mm(" <gray>Left-click switches ability, right-click ties the thread. Abilities:"));
+        for (Mode mode : Mode.values()) {
+            sender.sendMessage(Text.mm("  " + mode.tag() + mode.display() + " <dark_gray>(" + mode.shape() + ")</dark_gray> <gray>"
+                    + mode.description()));
+        }
+    }
+
+    private static List<String> modeIds() {
+        List<String> ids = new ArrayList<>();
+        for (Mode m : Mode.values()) ids.add(m.id());
+        return ids;
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        List<String> out = new ArrayList<>();
+        List<String> options = new ArrayList<>();
         if (args.length == 1) {
-            for (String s : List.of("give", "list", "sever", "help")) {
-                if (s.startsWith(args[0].toLowerCase())) out.add(s);
-            }
+            options.addAll(SUBS);
         } else if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
-            for (Player p : Bukkit.getOnlinePlayers()) {
-                if (p.getName().toLowerCase().startsWith(args[1].toLowerCase())) out.add(p.getName());
-            }
+            for (Player p : Bukkit.getOnlinePlayers()) options.add(p.getName());
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("mode")) {
+            options.addAll(modeIds());
         } else if (args.length == 2 && args[0].equalsIgnoreCase("sever") && sender instanceof Player p) {
-            out.add("all");
-            for (Graft g : manager.ofOwner(p.getUniqueId())) out.add(String.valueOf(g.id()));
+            options.add("all");
+            for (Graft g : manager.ofOwner(p.getUniqueId())) options.add(String.valueOf(g.id()));
         }
-        return out;
+        String prefix = args[args.length - 1].toLowerCase();
+        options.removeIf(o -> !o.toLowerCase().startsWith(prefix));
+        return options;
     }
 }

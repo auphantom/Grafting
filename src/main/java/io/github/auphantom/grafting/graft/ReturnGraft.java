@@ -28,24 +28,14 @@ public final class ReturnGraft extends Graft {
     private final BlockAnchor home;
 
     public ReturnGraft(int id, UUID owner, EntityAnchor being, BlockAnchor home, long expiresAt) {
-        super(id, owner, being, home, expiresAt);
+        super(id, Mode.RETURN, owner, being, home, expiresAt);
         this.being = being;
         this.home = home;
     }
 
     @Override
-    public String name() {
-        return "Death & Return";
-    }
-
-    @Override
     public String summary() {
         return "The next death of " + being.describe() + " becomes a journey back to " + home.describe() + ".";
-    }
-
-    @Override
-    public Color color() {
-        return Color.fromRGB(0x3cd2a0);
     }
 
     @Override

@@ -7,8 +7,8 @@ description: "Reassembly / Grafting - the Attendant of Mysteries' power to conne
 
 commands:
   graft:
-    description: Obtain the Thread of Grafting, list or sever your grafts.
-    usage: /graft <give|list|sever|help>
+    description: Get the Thread of Grafting, switch abilities, list or sever your grafts.
+    usage: /graft <give|mode|menu|list|sever|pack|help>
     permission: grafting.use
 
 permissions:

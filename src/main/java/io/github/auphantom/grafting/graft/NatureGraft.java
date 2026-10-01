@@ -50,7 +50,7 @@ public final class NatureGraft extends Graft {
     private final List<PotionEffectType> applied = new ArrayList<>();
 
     public NatureGraft(int id, UUID owner, BlockAnchor source, EntityAnchor being, Nature nature, long expiresAt) {
-        super(id, owner, source, being, expiresAt);
+        super(id, Mode.NATURE, owner, source, being, expiresAt);
         this.being = being;
         this.nature = nature;
     }
@@ -213,7 +213,8 @@ public final class NatureGraft extends Graft {
                 spend(); // spend first, so the blast below cannot trigger this graft again
                 Location at = self.getLocation();
                 Player owner = Bukkit.getPlayer(owner());
-                at.getWorld().createExplosion(at, 2.5f, false, false, owner != null ? owner : self);
+                GraftManager.dealDamage(() ->
+                        at.getWorld().createExplosion(at, 2.5f, false, false, owner != null ? owner : self));
             }
             default -> {
             }
