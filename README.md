@@ -16,7 +16,7 @@ A Paper 1.21 plugin that brings **Reassembly / Grafting**, the Sequence 1 *Atten
 | **Sneak + right-click** | Tie the thread to **yourself** |
 | **Sneak + F** | Use a grafted creature power, or open your grafted storage |
 
-The thread changes look with the ability (an ender pearl for Distance, a nether star for Supernova...). A particle thread shows every live graft. A graft snaps if either end is destroyed, and unravels after a while.
+The thread is plain string; its name and colour show the current ability. A particle thread shows every live graft. A graft snaps if either end is destroyed, and unravels after a while.
 
 Every player also carries the **Fool sigil** in the top-left inventory slot. Hover it for your spirit, distance level and threads, click it to open the **pathway menu**:
 

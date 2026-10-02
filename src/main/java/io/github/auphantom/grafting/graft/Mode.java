@@ -8,31 +8,31 @@ import org.bukkit.Color;
  * says what kind of thing each end must be.
  */
 public enum Mode {
-    DISTANCE("Distance", 0x9b6bff, End.PLACE, End.PLACE, "distance", "ender_pearl",
+    DISTANCE("Distance", 0x9b6bff, End.PLACE, End.PLACE, "distance",
             "Two places become one. Step on either, arrive on the other."),
-    FATE("Fate", 0xc81e3c, End.BEING, End.BEING, "fate", "shield",
+    FATE("Fate", 0xc81e3c, End.BEING, End.BEING, "fate",
             "Harm meant for the first finds the second instead."),
-    NATURE("Nature", 0x4fc95a, End.PLACE, End.BEING, "nature", "slime_ball",
+    NATURE("Nature", 0x4fc95a, End.PLACE, End.BEING, "nature",
             "The being takes on the nature of the block."),
-    RETURN("Death & Return", 0x3cd2a0, End.BEING, End.PLACE, "return", "totem_of_undying",
+    RETURN("Death & Return", 0x3cd2a0, End.BEING, End.PLACE, "return",
             "The being's next death becomes a journey back to the block."),
-    EXCHANGE("Exchange", 0x3fa9ff, End.BEING, End.BEING, "exchange", "chorus_fruit",
+    EXCHANGE("Exchange", 0x3fa9ff, End.BEING, End.BEING, "exchange",
             "The two swap places, and swap again whenever the first is struck."),
-    ENMITY("Enmity", 0xff8a1f, End.BEING, End.BEING, "enmity", "fermented_spider_eye",
+    ENMITY("Enmity", 0xff8a1f, End.BEING, End.BEING, "enmity",
             "Every hostility aimed at the first is aimed at the second."),
-    GRAVITY("Gravity", 0x6a5cff, End.BEING, End.PLACE, "gravity", "heavy_core",
+    GRAVITY("Gravity", 0x6a5cff, End.BEING, End.PLACE, "gravity",
             "For the being, 'down' now points at the block."),
-    PUPPET("Puppetry", 0xd6c8a8, End.BEING, End.BEING, "puppet", "lead",
+    PUPPET("Puppetry", 0xd6c8a8, End.BEING, End.BEING, "puppet",
             "The second is forced to move exactly as the first moves."),
-    SUPERNOVA("Supernova", 0xffd23f, End.PLACE, End.ANY, "supernova", "nether_star",
+    SUPERNOVA("Supernova", 0xffd23f, End.PLACE, End.ANY, "supernova",
             "The death of a star is grafted onto the target. It collapses, then detonates."),
-    LIFE("Life", 0xff4f8b, End.BEING, End.BEING, "life", "golden_apple",
+    LIFE("Life", 0xff4f8b, End.BEING, End.BEING, "life",
             "The first being's life now lives in the second. Kill the second and the first dies."),
-    LOCATION("Location", 0x2fd6c3, End.PLACE, End.PLACE, "location", "recovery_compass",
+    LOCATION("Location", 0x2fd6c3, End.PLACE, End.PLACE, "location",
             "Two whole areas trade places, blocks and chests included, until you let go."),
-    ABILITY("Ability", 0xf2a7ff, End.BEING, End.BEING, "ability", "breeze_rod",
+    ABILITY("Ability", 0xf2a7ff, End.BEING, End.BEING, "ability",
             "Your power (or a creature's) is grafted onto another, sustained by your spirit."),
-    STORAGE("Storage", 0xc98b4a, End.PLACE, End.BEING, "storage", "ender_chest",
+    STORAGE("Storage", 0xc98b4a, End.PLACE, End.BEING, "storage",
             "A container becomes part of the being's inventory: open it anywhere, overflow lands in it.");
 
     /** What an end of the thread may be tied to. */
@@ -55,16 +55,14 @@ public enum Mode {
     private final End first;
     private final End second;
     private final String id;
-    private final String model;
     private final String description;
 
-    Mode(String display, int rgb, End first, End second, String id, String model, String description) {
+    Mode(String display, int rgb, End first, End second, String id, String description) {
         this.display = display;
         this.color = Color.fromRGB(rgb);
         this.first = first;
         this.second = second;
         this.id = id;
-        this.model = model;
         this.description = description;
     }
 
@@ -92,11 +90,6 @@ public enum Mode {
     /** Lowercase id used in config keys, commands and the resource pack. */
     public String id() {
         return id;
-    }
-
-    /** The vanilla item the thread looks like in this mode, e.g. {@code ender_pearl}. */
-    public String model() {
-        return model;
     }
 
     public String description() {

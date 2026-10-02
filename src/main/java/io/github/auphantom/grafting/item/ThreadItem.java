@@ -20,15 +20,13 @@ import java.util.List;
  * <p>
  * It is a plain string, tagged through the persistent data container so it can never
  * be confused with ordinary string. The selected mode is stored on the item itself,
- * and the item's model is swapped to a vanilla item that fits the ability (an ender
- * pearl for Distance, a nether star for Supernova...), so no texture pack is needed.
+ * and shown in its name, lore and colour. The item itself stays plain string.
  */
 public final class ThreadItem {
 
     private static NamespacedKey key;
     private static NamespacedKey modeKey;
     private static NamespacedKey borrowedKey;
-    private static boolean customModels = true;
 
     private ThreadItem() {
     }
@@ -37,7 +35,6 @@ public final class ThreadItem {
         key = new NamespacedKey(plugin, "thread_of_grafting");
         modeKey = new NamespacedKey(plugin, "mode");
         borrowedKey = new NamespacedKey(plugin, "borrowed_from_graft");
-        customModels = plugin.getConfig().getBoolean("resource-pack.custom-models", true);
     }
 
     public static ItemStack create(Mode mode) {
@@ -49,13 +46,9 @@ public final class ThreadItem {
         return item;
     }
 
-    /** A menu picture of a thread in {@code mode}: same look, but not a usable thread. */
+    /** A menu picture of a thread in {@code mode}: plain string, not a usable thread. */
     public static ItemStack icon(Mode mode) {
-        ItemStack item = new ItemStack(Material.STRING);
-        ItemMeta meta = item.getItemMeta();
-        if (customModels) meta.setItemModel(NamespacedKey.minecraft(mode.model()));
-        item.setItemMeta(meta);
-        return item;
+        return new ItemStack(Material.STRING);
     }
 
     /**
@@ -105,7 +98,6 @@ public final class ThreadItem {
     public static void setMode(ItemStack item, Mode mode) {
         ItemMeta meta = item.getItemMeta();
         meta.getPersistentDataContainer().set(modeKey, PersistentDataType.STRING, mode.id());
-        if (customModels) meta.setItemModel(NamespacedKey.minecraft(mode.model()));
         meta.displayName(Text.mm("<gradient:#7b5cff:#d9ccff>Thread of Grafting</gradient> <dark_gray>·</dark_gray> "
                 + mode.tag() + mode.display()).decoration(TextDecoration.ITALIC, false));
 

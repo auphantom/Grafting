@@ -6,8 +6,8 @@ const { Rcon } = require('rcon-client')
 const { Vec3 } = require('vec3')
 
 const BOT = 'Klein'
-// Each ability's thread borrows a vanilla item model.
-const MODEL_TO_MODE = { ender_pearl: 'distance', shield: 'fate', slime_ball: 'nature', nether_star: 'supernova' }
+// The thread is plain string; its ability lives in the item's custom data ("grafting:mode").
+const modeOf = item => JSON.stringify(item?.components ?? []).match(/"grafting:mode"[^}]*?"value":"(\w+)"/)?.[1] ?? null
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const results = []
 const check = (name, ok, extra = '') => { results.push({ name, ok }); console.log(`${ok ? 'PASS' : 'FAIL'} ${name} ${extra}`) }
@@ -65,11 +65,7 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
     await cmd(`summon ${type} ${x} -60 ${z} {NoAI:1,Silent:1${extra}}`); await sleep(400)
     return () => bot.nearestEntity(e => e.name === type)
   }
-  const modeOfHand = () => {
-    const item = bot.heldItem
-    const model = item?.components?.find?.(c => c.type === 'item_model')
-    return model ? MODEL_TO_MODE[String(model.data).replace('minecraft:', '')] ?? String(model.data) : null
-  }
+  const modeOfHand = () => modeOf(bot.heldItem)
   const pickMode = async id => { bot.chat(`/graft mode ${id}`); await sleep(350) }
   const severAll = async () => { bot.chat('/graft sever all'); await sleep(350) }
   const refill = () => cmd(`graft spirit ${BOT} refill`)
@@ -78,7 +74,7 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
   await cmd(`graft level ${BOT} 1`); await refill()
 
   // ---------- 0. switching abilities ----------
-  check('starts on Distance, with its own model', modeOfHand() === 'distance', `model=${modeOfHand()}`)
+  check('starts on Distance', modeOfHand() === 'distance', `mode=${modeOfHand()}`)
   await look(bot.entity.position.offset(0, 30, 0))
   bot.swingArm('right'); await sleep(350) // left-click air
   check('left-click switches to next ability (Fate)', modeOfHand() === 'fate', `model=${modeOfHand()}`)
@@ -111,7 +107,7 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
     await bot.clickWindow(8, 0, 0); await sleep(800) // Supernova: switches the thread already held
     // Read it from the server: the bot does not refresh hotbar slots while a container is open.
     check('clicking an ability in the menu sets the thread to it',
-      (await cmd(`data get entity ${BOT} SelectedItem.components."minecraft:item_model"`)).includes('minecraft:nether_star'))
+      (await cmd(`data get entity ${BOT} SelectedItem.components."minecraft:custom_data".PublicBukkitValues."grafting:mode"`)).includes('supernova'))
     bot.closeWindow(bot.currentWindow); await sleep(300)
   }
   // Drawing a thread when you have none.
@@ -122,7 +118,7 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
     bot.closeWindow(bot.currentWindow); await sleep(300)
   }
   const drawn = bot.inventory.items().find(i => i.name === 'string')
-  check('the menu hands out a thread of the chosen ability', !!drawn && String(drawn.components?.find?.(c => c.type === 'item_model')?.data) === 'minecraft:shield')
+  check('the menu hands out a thread of the chosen ability', !!drawn && modeOf(drawn) === 'fate', `mode=${modeOf(drawn)}`)
   if (drawn) await bot.equip(drawn, 'hand')
   bot.setControlState('sneak', true); await sleep(150)
   bot.swingArm('right'); await sleep(600)

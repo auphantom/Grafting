@@ -104,8 +104,6 @@ pathway-menu:
 # By default the plugin hosts it itself on a small built-in web server.
 resource-pack:
   enabled: true
-  # Set custom-models to false to keep the plain string look without a pack.
-  custom-models: true
   required: false
   port: 8164
   # Address players use to reach this server. Leave empty to use server-ip, or localhost.
