@@ -1,7 +1,9 @@
 package io.github.auphantom.grafting;
 
 import io.github.auphantom.grafting.ui.PathwayMenu;
+import io.github.auphantom.grafting.beyonder.Beyonder;
 import io.github.auphantom.grafting.command.GraftCommand;
+import io.github.auphantom.grafting.graft.types.LocationGraft;
 import io.github.auphantom.grafting.item.Sigil;
 import io.github.auphantom.grafting.item.ThreadItem;
 import io.github.auphantom.grafting.listener.SigilListener;
@@ -22,6 +24,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class GraftingPlugin extends JavaPlugin {
 
     private GraftManager manager;
+    private Beyonder beyonder;
     private PackServer packServer;
 
     @Override
@@ -30,14 +33,17 @@ public final class GraftingPlugin extends JavaPlugin {
         Fx.setDensity(getConfig().getDouble("particles.density", 1.0));
         ThreadItem.init(this);
         Sigil.init(this);
+        LocationGraft.recover(this);
 
-        manager = new GraftManager(this);
+        beyonder = new Beyonder(this);
+        manager = new GraftManager(this, beyonder);
         GraftFactory factory = new GraftFactory(this, manager);
         ThreadListener listener = new ThreadListener(this, manager, factory);
         PathwayMenu menu = new PathwayMenu(this, manager, listener);
         SigilListener sigils = new SigilListener(this, manager, menu);
         listener.setMenu(menu);
         getServer().getPluginManager().registerEvents(listener, this);
+        getServer().getPluginManager().registerEvents(beyonder, this);
         getServer().getPluginManager().registerEvents(menu, this);
         getServer().getPluginManager().registerEvents(sigils, this);
 
@@ -53,6 +59,8 @@ public final class GraftingPlugin extends JavaPlugin {
 
         manager.start();
         getServer().getScheduler().runTaskTimer(this, listener::tickPending, 1L, 1L);
+        getServer().getScheduler().runTaskTimer(this, beyonder::tick, 1L, 1L);
+        getServer().getScheduler().runTaskTimer(this, beyonder::save, 20L * 60, 20L * 60);
         getServer().getScheduler().runTaskTimer(this, () -> {
             sigils.tick();
             menu.tick();
@@ -63,6 +71,7 @@ public final class GraftingPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (manager != null) manager.shutdown();
+        if (beyonder != null) beyonder.shutdown();
         if (packServer != null) packServer.stop();
     }
 }

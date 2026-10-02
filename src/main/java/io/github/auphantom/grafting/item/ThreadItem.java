@@ -29,6 +29,7 @@ public final class ThreadItem {
 
     private static NamespacedKey key;
     private static NamespacedKey modeKey;
+    private static NamespacedKey borrowedKey;
     private static boolean customModels = true;
 
     private ThreadItem() {
@@ -37,6 +38,7 @@ public final class ThreadItem {
     public static void init(GraftingPlugin plugin) {
         key = new NamespacedKey(plugin, "thread_of_grafting");
         modeKey = new NamespacedKey(plugin, "mode");
+        borrowedKey = new NamespacedKey(plugin, "borrowed_from_graft");
         customModels = plugin.getConfig().getBoolean("resource-pack.custom-models", true);
     }
 
@@ -56,6 +58,37 @@ public final class ThreadItem {
         if (customModels) meta.setItemModel(new NamespacedKey(NAMESPACE, mode.id()));
         item.setItemMeta(meta);
         return item;
+    }
+
+    /**
+     * A thread lent through an Ability graft: locked to one mode, tagged with the graft id, and
+     * removed the moment that graft ends.
+     */
+    public static ItemStack borrowed(Mode mode, int graftId) {
+        ItemStack item = create(mode);
+        ItemMeta meta = item.getItemMeta();
+        meta.getPersistentDataContainer().set(borrowedKey, PersistentDataType.INTEGER, graftId);
+        List<Component> lore = meta.lore() == null ? new ArrayList<>() : new ArrayList<>(meta.lore());
+        lore.add(0, lore("<color:#f2a7ff>Borrowed</color> <gray>through an Ability graft. Locked to "
+                + mode.tag() + mode.display() + "</color>."));
+        meta.lore(lore);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /** The Ability graft a borrowed thread belongs to, or -1 for a thread of one's own. */
+    public static int borrowedFrom(ItemStack item) {
+        if (!is(item)) return -1;
+        Integer id = item.getItemMeta().getPersistentDataContainer().get(borrowedKey, PersistentDataType.INTEGER);
+        return id == null ? -1 : id;
+    }
+
+    public static void removeBorrowed(org.bukkit.entity.Player player, int graftId) {
+        var inv = player.getInventory();
+        for (int i = 0; i < inv.getSize(); i++) {
+            if (borrowedFrom(inv.getItem(i)) == graftId) inv.setItem(i, null);
+        }
+        if (borrowedFrom(player.getItemOnCursor()) == graftId) player.setItemOnCursor(null);
     }
 
     public static boolean is(ItemStack item) {

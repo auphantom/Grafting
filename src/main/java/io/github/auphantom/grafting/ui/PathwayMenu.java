@@ -1,6 +1,8 @@
 package io.github.auphantom.grafting.ui;
 
 import io.github.auphantom.grafting.GraftingPlugin;
+import io.github.auphantom.grafting.beyonder.Beyonder;
+import io.github.auphantom.grafting.beyonder.DistanceArt;
 import io.github.auphantom.grafting.graft.Graft;
 import io.github.auphantom.grafting.graft.GraftManager;
 import io.github.auphantom.grafting.graft.Mode;
@@ -30,11 +32,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The pathway menu: a plain 3-row chest.
+ * The pathway menu: a plain 5-row chest.
  * <pre>
- *   row 1   the nine abilities          click: take / set your thread
- *   row 2   ......... [you] .........   your stats
- *   row 3   your active threads         click: sever
+ *   rows 1-2   the thirteen abilities                 click: set your thread
+ *   row 3      [you] . [spirit body] . [4 distance arts]
+ *   row 4      .........                              (filler)
+ *   row 5      your active threads                    click: sever
  * </pre>
  */
 public final class PathwayMenu implements Listener {
@@ -51,17 +54,23 @@ public final class PathwayMenu implements Listener {
     }
 
     public static final String TITLE = "Fool Pathway - Reassembly";
-    private static final int SIZE = 27;
-    private static final int PORTRAIT_SLOT = 13;
-    private static final int THREAD_ROW = 18;
+    private static final int SIZE = 45;
+    /** Where each ability sits: two centred rows (9 + 4). */
+    private static final int[] ABILITY_SLOTS = {0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15};
+    private static final int PORTRAIT_SLOT = 18;
+    private static final int BODY_SLOT = 20;
+    private static final int[] ART_SLOTS = {22, 23, 24, 25};
+    private static final int THREAD_ROW = 36;
 
     private final GraftingPlugin plugin;
     private final GraftManager grafts;
+    private final Beyonder beyonder;
     private final ThreadListener threads;
 
     public PathwayMenu(GraftingPlugin plugin, GraftManager grafts, ThreadListener threads) {
         this.plugin = plugin;
         this.grafts = grafts;
+        this.beyonder = grafts.beyonder();
         this.threads = threads;
     }
 
@@ -85,13 +94,14 @@ public final class PathwayMenu implements Listener {
 
         Mode selected = Sigil.selectedMode(player);
         Mode[] modes = Mode.values();
-        for (int i = 0; i < modes.length && i < 9; i++) {
-            inv.setItem(i, abilityIcon(modes[i], modes[i] == selected));
-        }
-
         ItemStack pane = filler();
         for (int i = 9; i < THREAD_ROW; i++) inv.setItem(i, pane);
+        for (int i = 0; i < modes.length && i < ABILITY_SLOTS.length; i++) {
+            inv.setItem(ABILITY_SLOTS[i], abilityIcon(player, modes[i], modes[i] == selected));
+        }
         inv.setItem(PORTRAIT_SLOT, portrait(player));
+        inv.setItem(BODY_SLOT, spiritBodyIcon(player));
+        for (int i = 0; i < ART_SLOTS.length; i++) inv.setItem(ART_SLOTS[i], artIcon(player, DistanceArt.values()[i]));
 
         List<Graft> owned = grafts.ofOwner(player.getUniqueId());
         for (int i = 0; i < owned.size() && i < 9; i++) {
@@ -121,18 +131,90 @@ public final class PathwayMenu implements Listener {
         return head;
     }
 
-    private ItemStack abilityIcon(Mode mode, boolean selected) {
+    private ItemStack spiritBodyIcon(Player player) {
+        boolean on = beyonder.inSpiritBody(player);
+        ItemStack item = new ItemStack(on ? Material.SOUL_LANTERN : Material.SOUL_TORCH);
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(Component.text("Spirit Body", Bars.CYAN).decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true));
+        List<Component> lore = new ArrayList<>();
+        lore.add(Bars.line("Your spirit body and main body are one.", Bars.GRAY));
+        lore.add(Bars.line("Fly freely. Physical harm cannot touch you,", Bars.WHITE));
+        lore.add(Bars.line("but magic still does.", Bars.WHITE));
+        lore.add(Bars.line("Using any ability returns you to your body.", Bars.GRAY));
+        lore.add(Component.empty());
+        lore.add(Bars.stat("Cost", (int) beyonder.useCost("spirit-body") + " spirit", Bars.CYAN, Bars.WHITE));
+        lore.add(Component.empty());
+        lore.add(Bars.line(on ? "\u25cf Active. Click to return" : "Click to shift into it", on ? Bars.GREEN_HI : Bars.YELLOW));
+        meta.lore(lore);
+        meta.setEnchantmentGlintOverride(on);
+        meta.setTooltipStyle(Sigil.TOOLTIP_STYLE);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack artIcon(Player player, DistanceArt art) {
+        int level = beyonder.level(player);
+        boolean unlocked = art.level() <= level;
+        boolean chosen = beyonder.art(player) == art;
+        Material icon = !unlocked ? Material.GRAY_DYE : switch (art) {
+            case STEP -> Material.LEATHER_BOOTS;
+            case GATEWAY -> Material.ENDER_PEARL;
+            case ENEMY -> Material.ENDER_EYE;
+            case INFINITY -> Material.END_CRYSTAL;
+        };
+        ItemStack item = new ItemStack(icon);
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(Component.text("Distance " + art.level() + ": " + art.display(),
+                unlocked ? Bars.color(Mode.DISTANCE) : Bars.GRAY).decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true));
+        List<Component> lore = new ArrayList<>();
+        for (String line : wrap(art.description(), 34)) lore.add(Bars.line(line, Bars.WHITE));
+        lore.add(Component.empty());
+        String reach = switch (art) {
+            case STEP -> (int) beyonder.stepRange(player) + " blocks";
+            case GATEWAY -> beyonder.gatewayRange(player) < 0 ? "unlimited" : beyonder.gatewayRange(player) + " blocks";
+            case ENEMY -> (int) beyonder.enemyRange(player) + " blocks from you";
+            case INFINITY -> "drains " + (int) beyonder.upkeep("infinity") + " spirit/s";
+        };
+        if (unlocked) lore.add(Bars.stat("Reach", reach, Bars.CYAN, Bars.WHITE));
+        lore.add(Bars.stat("Cost", (int) beyonder.useCost(art.id()) + " spirit", Bars.CYAN, Bars.WHITE));
+        lore.add(Component.empty());
+        if (!unlocked) {
+            double need = beyonder.threshold(art.level());
+            double have = beyonder.profile(player).travelled();
+            lore.add(Bars.line("Locked: distance level " + art.level(), Bars.RED));
+            lore.add(Bars.stat("Travelled", (int) have + "/" + (int) need + " blocks", Bars.GRAY, Bars.WHITE));
+            lore.add(Bars.bar(have / need, 20, Bars.FOOL, Bars.CYAN));
+        } else {
+            lore.add(Bars.line(chosen ? "\u25cf Your Distance thread uses this" : "Click to use this art",
+                    chosen ? Bars.GREEN_HI : Bars.YELLOW));
+        }
+        meta.lore(lore);
+        meta.setEnchantmentGlintOverride(chosen && unlocked);
+        meta.setTooltipStyle(Sigil.TOOLTIP_STYLE);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack abilityIcon(Player player, Mode mode, boolean selected) {
         ItemStack icon = ThreadItem.icon(mode);
         ItemMeta meta = icon.getItemMeta();
         meta.displayName(Component.text(mode.display(), Bars.color(mode)).decoration(TextDecoration.ITALIC, false)
                 .decoration(TextDecoration.BOLD, true));
         List<Component> lore = new ArrayList<>();
         lore.add(Bars.line(mode.shape(), Bars.GRAY));
+        if (mode == Mode.DISTANCE) lore.add(Bars.line("Art: " + beyonder.art(player).display(), Bars.FOOL));
         for (String line : wrap(mode.description(), 34)) lore.add(Bars.line(line, Bars.WHITE));
         lore.add(Component.empty());
-        long seconds = plugin.getConfig().getLong("durations." + mode.id(), 60);
-        lore.add(Bars.stat("Lasts", mode == Mode.SUPERNOVA ? "until it detonates"
-                : (mode == Mode.RETURN ? seconds + "s or one death" : seconds + "s"), Bars.CYAN, Bars.WHITE));
+        if (mode != Mode.DISTANCE) {
+            long seconds = plugin.getConfig().getLong("durations." + mode.id(), 60);
+            lore.add(Bars.stat("Lasts", mode == Mode.SUPERNOVA ? "until it detonates"
+                    : (mode == Mode.RETURN ? seconds + "s or one death" : seconds + "s"), Bars.CYAN, Bars.WHITE));
+            double upkeep = beyonder.upkeep(mode.id());
+            lore.add(Bars.stat("Spirit", (int) beyonder.useCost(mode.id()) + (upkeep > 0 ? " + " + (int) upkeep + "/s" : "")
+                    + " per use", Bars.CYAN, Bars.WHITE));
+        }
         lore.add(Component.empty());
         lore.add(Bars.line(selected ? "\u25cf Your thread is set to this" : "Click to use " + mode.display(),
                 selected ? Bars.GREEN_HI : Bars.YELLOW));
@@ -189,8 +271,20 @@ public final class PathwayMenu implements Listener {
         if (event.getClickedInventory() != event.getView().getTopInventory()) return;
         int slot = event.getRawSlot();
 
-        if (slot < Mode.values().length) {
-            use(player, Mode.values()[slot]);
+        int ability = indexOf(ABILITY_SLOTS, slot);
+        int art = indexOf(ART_SLOTS, slot);
+        if (ability >= 0 && ability < Mode.values().length) {
+            use(player, Mode.values()[ability]);
+        } else if (slot == BODY_SLOT) {
+            beyonder.toggleSpiritBody(player);
+        } else if (art >= 0) {
+            DistanceArt chosen = DistanceArt.values()[art];
+            if (beyonder.setArt(player, chosen)) {
+                ItemStack thread = findThread(player);
+                if (thread != null && ThreadItem.mode(thread) != Mode.DISTANCE) threads.select(player, thread, Mode.DISTANCE);
+                else if (thread == null) use(player, Mode.DISTANCE);
+                player.playSound(player, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1f, 0.6f + 0.2f * art);
+            }
         } else {
             Integer graftId = holder.threads.get(slot);
             if (graftId == null) return;
@@ -219,6 +313,11 @@ public final class PathwayMenu implements Listener {
         }
         player.playSound(player, Sound.ENTITY_ITEM_PICKUP, 0.8f, 0.8f);
         Text.send(player, "<gray>You draw a " + mode.tag() + "Thread of " + mode.display() + "</color>.");
+    }
+
+    private static int indexOf(int[] slots, int slot) {
+        for (int i = 0; i < slots.length; i++) if (slots[i] == slot) return i;
+        return -1;
     }
 
     /** The thread in the main hand, else the first one in the inventory. */

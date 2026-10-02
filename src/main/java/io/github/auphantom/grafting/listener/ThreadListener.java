@@ -9,9 +9,15 @@ import io.github.auphantom.grafting.util.Text;
 import io.github.auphantom.grafting.anchor.Anchor;
 import io.github.auphantom.grafting.anchor.BlockAnchor;
 import io.github.auphantom.grafting.anchor.EntityAnchor;
+import io.github.auphantom.grafting.beyonder.Beyonder;
+import io.github.auphantom.grafting.beyonder.DistanceArt;
 import io.github.auphantom.grafting.graft.GraftFactory;
 import io.github.auphantom.grafting.graft.GraftManager;
 import io.github.auphantom.grafting.graft.Mode;
+import io.github.auphantom.grafting.graft.types.AbilityGraft;
+import io.github.auphantom.grafting.graft.types.StorageGraft;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.GameMode;
@@ -30,10 +36,12 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
+import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.RayTraceResult;
@@ -64,6 +72,7 @@ public final class ThreadListener implements Listener {
     private final GraftingPlugin plugin;
     private final GraftManager manager;
     private final GraftFactory factory;
+    private final Beyonder beyonder;
     private PathwayMenu menu;
     private final Map<UUID, Pending> pending = new HashMap<>();
     /** Last tick each player used the thread: one physical click can produce several events. */
@@ -81,6 +90,7 @@ public final class ThreadListener implements Listener {
         this.plugin = plugin;
         this.manager = manager;
         this.factory = factory;
+        this.beyonder = manager.beyonder();
     }
 
     public void setMenu(PathwayMenu menu) {
@@ -91,6 +101,10 @@ public final class ThreadListener implements Listener {
 
     /** Switches the thread in {@code hand} to {@code mode}, with feedback. Lets go of a half-tied thread. */
     public void select(Player player, ItemStack hand, Mode mode) {
+        if (ThreadItem.borrowedFrom(hand) >= 0) {
+            Text.actionBar(player, "<color:#f2a7ff>A borrowed thread is locked to its ability.");
+            return;
+        }
         ThreadItem.setMode(hand, mode);
         // An in-place edit is not sent to the client while a menu is open, so set the slot again.
         if (hand.equals(player.getInventory().getItemInMainHand())) {
@@ -101,7 +115,7 @@ public final class ThreadListener implements Listener {
             Text.send(player, "<gray>You let go of the loose thread to change ability.");
         }
         Text.actionBar(player, "<dark_gray>« </dark_gray>" + mode.tag() + "<b>" + mode.display()
-                + "</b><dark_gray> »  <gray>" + mode.shape());
+                + "</b><dark_gray> »  <gray>" + shape(player, mode));
         float pitch = 0.7f + 0.1f * mode.ordinal();
         player.playSound(player, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.9f, pitch);
         player.playSound(player, Sound.ITEM_BOOK_PAGE_TURN, 0.7f, 1.2f);
@@ -109,6 +123,18 @@ public final class ThreadListener implements Listener {
         Fx.ring(feet, 0.9, Particle.DUST, Fx.dust(mode.color(), 1f), 30);
         Fx.ring(feet.clone().add(0, 0.9, 0), 0.6, Particle.DUST, Fx.dust(mode.color().mixColors(org.bukkit.Color.WHITE), 0.7f), 20);
         Fx.spawn(player.getWorld(), Particle.ENCHANT, player.getLocation().add(0, 1, 0), Fx.scaled(25), 0.4, 0.6, 0.4, 0.6, null);
+    }
+
+    /** "Place ➜ Place" etc, adjusted for the player's current Distance art. */
+    private String shape(Player player, Mode mode) {
+        if (mode != Mode.DISTANCE) return mode.shape();
+        DistanceArt art = beyonder.art(player);
+        return switch (art) {
+            case STEP -> "Step: right-click a block, or type x y z in chat";
+            case GATEWAY -> "Gateway: Place ➜ Place";
+            case ENEMY -> "Enemy Step: Being ➜ Place";
+            case INFINITY -> "Infinity: right-click to raise or lower";
+        };
     }
 
     private boolean debounceSwitch(Player player) {
@@ -235,18 +261,36 @@ public final class ThreadListener implements Listener {
 
     private void tie(Player player, Mode mode, Anchor anchor) {
         UUID id = player.getUniqueId();
+        if (mode == Mode.DISTANCE && !pending.containsKey(id)) {
+            DistanceArt art = beyonder.art(player);
+            if (art == DistanceArt.STEP) {
+                Location target = anchor instanceof BlockAnchor b ? b.standingSpot()
+                        : anchor instanceof EntityAnchor e && !e.entity().equals(player) ? e.entity().getLocation() : null;
+                if (target == null) {
+                    Text.send(player, "<gray>Right-click a block (or type <white>x y z</white> in chat) to choose where your next step lands.");
+                    return;
+                }
+                target.setYaw(player.getLocation().getYaw());
+                beyonder.armStep(player, target);
+                return;
+            }
+            if (art == DistanceArt.INFINITY) {
+                beyonder.setInfinity(player, !beyonder.infinity(player));
+                return;
+            }
+        }
         Pending first = pending.get(id);
         long now = manager.currentTick();
 
         if (first == null || first.mode() != mode || now - first.since() > PENDING_TIMEOUT || !first.anchor().isIntact()) {
-            if (!GraftFactory.accepts(mode.first(), anchor)) {
-                fail(player, mode.tag() + mode.display() + "</color> <gray>starts from " + mode.first().article()
+            if (!GraftFactory.accepts(factory.firstEnd(player, mode), anchor)) {
+                fail(player, mode.tag() + mode.display() + "</color> <gray>starts from " + factory.firstEnd(player, mode).article()
                         + ", not " + Text.esc(anchor.describe()) + ".");
                 return;
             }
             pending.put(id, new Pending(mode, anchor, now));
             Text.send(player, mode.tag() + mode.display() + "<dark_gray>:</dark_gray> <gray>thread tied to <white>"
-                    + Text.esc(anchor.describe()) + "</white>. Now choose " + mode.second().article() + ".");
+                    + Text.esc(anchor.describe()) + "</white>. Now choose " + factory.secondEnd(player, mode).article() + ".");
             Location at = anchor.center();
             Fx.spawn(at.getWorld(), Particle.ENCHANT, at, Fx.scaled(50), 0.5, 0.5, 0.5, 0.8, null);
             Fx.sphere(at, 0.7, Particle.DUST, Fx.dust(mode.color(), 0.8f), 30);
@@ -258,20 +302,20 @@ public final class ThreadListener implements Listener {
             Text.send(player, "<gray>The thread is already tied there. <dark_gray>(Left-click to switch ability and let go.)");
             return;
         }
-        if (!GraftFactory.accepts(mode.second(), anchor)) {
-            fail(player, mode.tag() + mode.display() + "</color> <gray>must end on " + mode.second().article()
+        if (!GraftFactory.accepts(factory.secondEnd(player, mode), anchor)) {
+            fail(player, mode.tag() + mode.display() + "</color> <gray>must end on " + factory.secondEnd(player, mode).article()
                     + ", not " + Text.esc(anchor.describe()) + ".");
             return;
         }
 
         pending.remove(id);
-        GraftFactory.Result result = factory.create(id, mode, first.anchor(), anchor);
+        GraftFactory.Result result = factory.create(player, mode, first.anchor(), anchor);
         if (result.graft() == null) {
-            fail(player, "<red>" + Text.esc(result.error()));
+            if (result.error() != null) fail(player, "<red>" + Text.esc(result.error()));
             return;
         }
         manager.add(result.graft());
-        Text.send(player, mode.tag() + result.graft().name() + "</color> <dark_gray>#"
+        Text.send(player, result.graft().mode().tag() + result.graft().name() + "</color> <dark_gray>#"
                 + result.graft().id() + "</dark_gray> <gray>"
                 + Text.esc(first.anchor().describe()) + " " + mode.tag() + "⟶</color> " + Text.esc(anchor.describe()));
         Text.send(player, "<dark_gray><i>" + Text.esc(result.graft().summary()));
@@ -337,6 +381,51 @@ public final class ThreadListener implements Listener {
         lastUse.remove(id);
         lastSwitch.remove(id);
         pendingSwing.remove(id);
+        AbilityGraft.forget(id);
+        StorageGraft.forget(id);
+    }
+
+    // ------------------------------------------------------------------ Step by chat, sneak + F, overflow
+
+    /** Typing "x y z" (optionally a world) in chat while holding a Step thread arms the step. */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onChat(AsyncChatEvent event) {
+        Player player = event.getPlayer();
+        ItemStack hand = player.getInventory().getItemInMainHand();
+        if (!ThreadItem.is(hand) || ThreadItem.mode(hand) != Mode.DISTANCE) return;
+        String text = PlainTextComponentSerializer.plainText().serialize(event.message()).trim();
+        if (!text.matches("~?-?\\d+(\\.\\d+)?\\s+~?-?\\d+(\\.\\d+)?\\s+~?-?\\d+(\\.\\d+)?(\\s+\\S+)?")) return;
+        event.setCancelled(true);
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (beyonder.art(player) != DistanceArt.STEP) beyonder.setArt(player, DistanceArt.STEP);
+            Location target = Beyonder.parseTarget(player, text.split("\\s+"));
+            if (target == null) Text.send(player, "<red>Unknown place: " + Text.esc(text));
+            else beyonder.armStep(player, target);
+        });
+    }
+
+    /** Sneak + F: use a grafted creature power, else open grafted storage. */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onSwapKey(PlayerSwapHandItemsEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isSneaking()) return;
+        if (AbilityGraft.usePower(player, manager.currentTick())) {
+            event.setCancelled(true);
+            return;
+        }
+        StorageGraft storage = StorageGraft.of(player);
+        if (storage != null) {
+            event.setCancelled(true);
+            storage.open(player);
+        }
+    }
+
+    /** Items that do not fit in a full inventory flow into grafted storage. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onPickup(PlayerAttemptPickupItemEvent event) {
+        if (event.getRemaining() < event.getItem().getItemStack().getAmount()) return;
+        StorageGraft storage = StorageGraft.of(event.getPlayer());
+        if (storage != null && storage.absorb(event.getPlayer(), event.getItem())) event.setCancelled(true);
     }
 
     // ------------------------------------------------------------------ grafts reacting to the world

@@ -72,14 +72,28 @@ public final class Sigil {
         lines.add(Bars.line("Attendant of Mysteries", Bars.GRAY));
         lines.add(Component.empty());
 
+        var beyonder = grafts.beyonder();
+        double spirit = beyonder.spirit(player), max = beyonder.maxSpirit();
+        lines.add(Bars.stat("Spirit", (int) spirit + "/" + (int) max, Bars.CYAN, Bars.WHITE));
+        lines.add(Bars.bar(spirit / max, 20, Bars.CYAN, Bars.FOOL));
+        lines.add(Component.empty());
+
+        int level = beyonder.level(player);
+        double from = beyonder.threshold(level), to = level >= 4 ? from : beyonder.threshold(level + 1);
+        double travelled = beyonder.profile(player).travelled();
+        lines.add(Bars.stat("Distance", "Level " + level + (level >= 4 ? " (max)" : "  " + (int) travelled + "/" + (int) to),
+                Bars.FOOL, Bars.WHITE));
+        lines.add(Bars.bar(level >= 4 ? 1 : (travelled - from) / Math.max(1, to - from), 20, Bars.FOOL, Bars.MYSTERY));
+        lines.add(Component.empty());
+
         lines.add(Bars.stat("Threads", owned.size() + "/" + maxGrafts, Bars.CYAN, Bars.WHITE));
         lines.add(Bars.bar(owned.size() / (double) Math.max(1, maxGrafts), 20, Bars.CYAN, Bars.MYSTERY));
         lines.add(Component.empty());
 
-        int known = Mode.values().length;
-        lines.add(Bars.stat("Abilities", known + "/" + known, Bars.GREEN_HI, Bars.WHITE));
-        lines.add(Bars.bar(1, 20, Bars.GREEN_HI, Bars.GREEN_LO));
-        lines.add(Component.empty());
+        if (beyonder.inSpiritBody(player)) {
+            lines.add(Bars.line("\u25cf Spirit Body", Bars.CYAN));
+            lines.add(Component.empty());
+        }
 
         if (!owned.isEmpty()) {
             long now = grafts.currentTick();

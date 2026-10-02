@@ -38,6 +38,11 @@ public abstract class Graft {
         return mode.display();
     }
 
+    /** Key under {@code spirit.cost} / {@code spirit.upkeep} in the config. Defaults to the mode id. */
+    public String costKey() {
+        return mode.id();
+    }
+
     /** One line explaining what this particular graft does, shown to the owner. */
     public abstract String summary();
 

@@ -2,6 +2,7 @@ package io.github.auphantom.grafting.graft;
 
 import io.github.auphantom.grafting.util.Fx;
 import io.github.auphantom.grafting.GraftingPlugin;
+import io.github.auphantom.grafting.beyonder.Beyonder;
 import io.github.auphantom.grafting.util.Text;
 import io.github.auphantom.grafting.anchor.Anchor;
 import org.bukkit.Bukkit;
@@ -30,6 +31,7 @@ public final class GraftManager {
     private static final double STUB_LENGTH = 5;
 
     private final GraftingPlugin plugin;
+    private final Beyonder beyonder;
     private final List<Graft> grafts = new ArrayList<>();
     private BukkitTask task;
     private int nextId = 1;
@@ -54,8 +56,17 @@ public final class GraftManager {
         return dealingDamage > 0;
     }
 
-    public GraftManager(GraftingPlugin plugin) {
+    public GraftManager(GraftingPlugin plugin, Beyonder beyonder) {
         this.plugin = plugin;
+        this.beyonder = beyonder;
+    }
+
+    public Beyonder beyonder() {
+        return beyonder;
+    }
+
+    public GraftingPlugin plugin() {
+        return plugin;
     }
 
     public void start() {
@@ -175,6 +186,8 @@ public final class GraftManager {
                 end(graft, "snapped: one of its ends is gone");
             } else if (tick >= graft.expiresAt()) {
                 end(graft, "has unravelled");
+            } else if (tick % 20 == 0 && !payUpkeep(graft)) {
+                end(graft, "faded: your spirit can no longer sustain it");
             } else {
                 try {
                     graft.tick(tick);
@@ -186,6 +199,15 @@ public final class GraftManager {
                 if (tick % 3 == 0 && graft.drawsThread()) drawThread(graft);
             }
         }
+    }
+
+    /** Grafts with a per-second cost drain their owner's spirit. False once it runs dry. */
+    private boolean payUpkeep(Graft graft) {
+        double cost = beyonder.upkeep(graft.costKey());
+        if (cost <= 0) return true;
+        Player owner = Bukkit.getPlayer(graft.owner());
+        if (owner == null) return false;
+        return beyonder.drain(owner, cost);
     }
 
     private void drawThread(Graft graft) {

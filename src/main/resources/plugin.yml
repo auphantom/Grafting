@@ -8,7 +8,7 @@ description: "Reassembly / Grafting - the Attendant of Mysteries' power to conne
 commands:
   graft:
     description: Get the Thread of Grafting, switch abilities, list or sever your grafts.
-    usage: /graft <menu|give|mode|list|sever|pack|help>
+    usage: /graft <menu|give|mode|list|sever|body|art|step|lend|storage|level|spirit|sequence|pack|help>
     permission: grafting.use
 
 permissions:
@@ -21,3 +21,6 @@ permissions:
   grafting.take:
     description: Draw a Thread of Grafting from the pathway menu.
     default: true
+  grafting.admin:
+    description: Set distance levels, spirit and sequences with /graft level, spirit and sequence.
+    default: op

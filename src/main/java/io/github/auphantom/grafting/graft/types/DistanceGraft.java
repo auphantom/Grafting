@@ -33,13 +33,26 @@ public final class DistanceGraft extends Graft {
 
     private final BlockAnchor a;
     private final BlockAnchor b;
+    private final java.util.function.BiConsumer<Player, Double> travelled;
     /** Entities that just arrived on a pad. They must step off before it can carry them again. */
     private final Map<UUID, BlockAnchor> arrived = new HashMap<>();
 
-    public DistanceGraft(int id, UUID owner, BlockAnchor a, BlockAnchor b, long expiresAt) {
+    public DistanceGraft(int id, UUID owner, BlockAnchor a, BlockAnchor b, long expiresAt,
+                         java.util.function.BiConsumer<Player, Double> travelled) {
         super(id, Mode.DISTANCE, owner, a, b, expiresAt);
         this.a = a;
         this.b = b;
+        this.travelled = travelled;
+    }
+
+    @Override
+    public String name() {
+        return "Gateway";
+    }
+
+    @Override
+    public String costKey() {
+        return "gateway";
     }
 
     @Override
@@ -76,12 +89,16 @@ public final class DistanceGraft extends Graft {
             Vector velocity = entity.getVelocity();
 
             if (entity.teleport(dest, PlayerTeleportEvent.TeleportCause.PLUGIN)) {
+                double moved = old.getWorld().equals(dest.getWorld()) ? old.distance(dest) : 0;
                 entity.setVelocity(velocity);
                 entity.setFallDistance(0);
                 arrived.put(entity.getUniqueId(), to);
                 old.getWorld().spawnParticle(Particle.REVERSE_PORTAL, old.add(0, 1, 0), 20, 0.3, 0.6, 0.3, 0.02);
                 dest.getWorld().spawnParticle(Particle.PORTAL, dest.clone().add(0, 1, 0), 30, 0.3, 0.6, 0.3, 0.3);
                 dest.getWorld().playSound(dest, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.6f);
+                if (entity instanceof Player p && p.getUniqueId().equals(owner())) {
+                    travelled.accept(p, moved);
+                }
             }
         }
     }

@@ -10,7 +10,7 @@ import java.util.function.Consumer;
 import static io.github.auphantom.grafting.packgen.Pixels.*;
 
 /**
- * The nine ability icons. Every icon shares one motif (a spool of thread, recoloured
+ * The ability icons. Every icon shares one motif (a spool of thread, recoloured
  * per ability) with a symbol of the concept being tampered with stitched on top.
  */
 final class AbilityIcons {
@@ -30,6 +30,10 @@ final class AbilityIcons {
         icons.put("gravity", icon(0x6a5cff, AbilityIcons::gravity));
         icons.put("puppet", icon(0xd6c8a8, AbilityIcons::puppet));
         icons.put("supernova", icon(0xffd23f, AbilityIcons::supernova));
+        icons.put("life", icon(0xff4f8b, AbilityIcons::life));
+        icons.put("location", icon(0x2fd6c3, AbilityIcons::location));
+        icons.put("ability", icon(0xf2a7ff, AbilityIcons::ability));
+        icons.put("storage", icon(0xc98b4a, AbilityIcons::storage));
         return icons;
     }
 
@@ -250,6 +254,75 @@ final class AbilityIcons {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /** Two hearts joined by a thread: one life living in another body. */
+    static void life(Graphics2D g) {
+        Color c = new Color(0xff4f8b);
+        heart(g, 13, 2, c);
+        Color pale = tint(c, 0.55);
+        g.setColor(shade(pale, 0.8));
+        g.fillOval(24, 11, 5, 5);
+        g.fillOval(27, 11, 5, 5);
+        g.fillPolygon(new Polygon(new int[]{24, 32, 28}, new int[]{14, 14, 19}, 3));
+        g.setColor(Color.WHITE);
+        g.drawLine(21, 12, 25, 15);
+        g.fillRect(15, 4, 2, 1);
+    }
+
+    /** Two ground tiles with arrows trading places between them. */
+    static void location(Graphics2D g) {
+        Color c = new Color(0x2fd6c3);
+        g.setColor(new Color(0x4a8c3a));
+        g.fillRect(13, 3, 8, 3);
+        g.setColor(new Color(0x6b4a2c));
+        g.fillRect(13, 6, 8, 3);
+        g.setColor(new Color(0xd8d6a8));
+        g.fillRect(23, 11, 8, 3);
+        g.setColor(new Color(0x1d1430));
+        g.fillRect(23, 14, 8, 3);
+        g.setColor(c);
+        g.setStroke(new BasicStroke(1));
+        g.drawLine(22, 4, 27, 4);
+        g.fillPolygon(new Polygon(new int[]{27, 30, 27}, new int[]{2, 4, 7}, 3));
+        g.drawLine(17, 15, 22, 15);
+        g.fillPolygon(new Polygon(new int[]{17, 14, 17}, new int[]{12, 15, 18}, 3));
+    }
+
+    /** A glowing open hand with a spark passing into it: power handed on. */
+    static void ability(Graphics2D g) {
+        Color c = new Color(0xf2a7ff);
+        g.setColor(shade(c, 0.7));
+        g.fillRoundRect(17, 9, 9, 8, 3, 3);
+        g.setColor(c);
+        g.fillRect(17, 4, 2, 6);
+        g.fillRect(19, 3, 2, 7);
+        g.fillRect(21, 3, 2, 7);
+        g.fillRect(23, 4, 2, 6);
+        g.fillRect(25, 8, 3, 2);
+        g.fillRoundRect(18, 10, 7, 6, 2, 2);
+        g.setColor(Color.WHITE);
+        g.fillRect(14, 2, 1, 3);
+        g.fillRect(13, 3, 3, 1);
+        g.fillRect(29, 12, 1, 3);
+        g.fillRect(28, 13, 3, 1);
+    }
+
+    /** A small chest with a thread tied around its latch. */
+    static void storage(Graphics2D g) {
+        Color wood = new Color(0xc98b4a);
+        g.setColor(shade(wood, 0.6));
+        g.fillRect(15, 6, 14, 11);
+        g.setColor(wood);
+        g.fillRect(16, 7, 12, 4);
+        g.fillRect(16, 12, 12, 4);
+        g.setColor(shade(wood, 0.45));
+        g.drawLine(15, 11, 28, 11);
+        g.setColor(new Color(0xd9d9d9));
+        g.fillRect(21, 10, 2, 3);
+        g.setColor(new Color(0x9b6bff));
+        g.drawLine(20, 12, 15, 17);
+        g.drawLine(23, 12, 26, 15);
+    }
 
     static void heart(Graphics2D g, int x, int y, Color c) {
         g.setColor(shade(c, 0.7));

@@ -16,9 +16,72 @@ durations:
   enmity: 60      # Being + Being      hostility toward the first is aimed at the second
   gravity: 20     # Being + Place      'down' points at the block
   puppet: 30      # Being + Being      the second mirrors the first's movements
+  enemy: 20       # Being + Place      (Distance lv3) a being's next step lands on the block
+  life: 300       # Being + Being      the first's life lives in the second
+  location: 600   # Place + Place      two areas trade places until cut
+  ability: 120    # Being + Being      your power (or a creature's) grafted onto a player
+  storage: 1800   # Place + Being      a container becomes part of a player's inventory
 
-# Distance grafts refuse to connect places farther apart than this (blocks). -1 = unlimited.
+# Gateway (Distance lv2) refuses to connect places farther apart than this at level 2,
+# doubling with every distance level after. -1 = unlimited.
 max-distance: 256
+
+# Spirit: every ability costs some, once per use or every second it is held.
+spirit:
+  max: 1000
+  regen-per-second: 8
+  creative-free: false
+  cost:               # once, when the graft is made
+    step: 40
+    gateway: 60
+    enemy: 120
+    infinity: 80      # to raise it
+    spirit-body: 30   # to shift into it
+    fate: 60
+    nature: 40
+    return: 120
+    exchange: 50
+    enmity: 50
+    gravity: 60
+    puppet: 70
+    supernova: 300
+    life: 400
+    location: 250
+    ability: 80
+    storage: 120
+  upkeep:             # every second while it holds
+    infinity: 25
+    infinity-per-damage: 15   # extra for every point of damage Infinity stops
+    ability: 6
+
+# Distance levels rise with blocks travelled through your own distance grafts (Step and Gateway).
+distance:
+  levels:             # total blocks needed to reach each level
+    2: 500
+    3: 2000
+    4: 6000
+  step-range: 500     # how far Step reaches at level 1, doubling every level
+  enemy-range: 12     # how close a being must be for Enemy Step (grows with level)
+
+# Location: the area moved around each end. radius 8 = a 17x17 area, about one chunk.
+location:
+  radius: 8
+  depth: 4            # blocks below the anchor
+  height: 12          # blocks above the anchor
+
+# Chance that a Beyonder shakes off a graft (players only; set with /graft sequence).
+resist:
+  life:
+    same-or-higher: 0.85
+    lower: 0.30
+  enemy:
+    same-or-higher: 0.60
+    lower: 0.20
+
+# The spirit / distance readout above the hotbar.
+hud:
+  enabled: true
+  always: false       # false = only while holding the thread, in Spirit Body, or regenerating
 
 # Place + Anything: the death of a star grafted onto the target.
 supernova:

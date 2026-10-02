@@ -25,7 +25,15 @@ public enum Mode {
     PUPPET("Puppetry", 0xd6c8a8, End.BEING, End.BEING, "puppet",
             "The second is forced to move exactly as the first moves."),
     SUPERNOVA("Supernova", 0xffd23f, End.PLACE, End.ANY, "supernova",
-            "The death of a star is grafted onto the target. It collapses, then detonates.");
+            "The death of a star is grafted onto the target. It collapses, then detonates."),
+    LIFE("Life", 0xff4f8b, End.BEING, End.BEING, "life",
+            "The first being's life now lives in the second. Kill the second and the first dies."),
+    LOCATION("Location", 0x2fd6c3, End.PLACE, End.PLACE, "location",
+            "Two whole areas trade places, blocks and chests included, until you let go."),
+    ABILITY("Ability", 0xf2a7ff, End.BEING, End.BEING, "ability",
+            "Your power (or a creature's) is grafted onto another, sustained by your spirit."),
+    STORAGE("Storage", 0xc98b4a, End.PLACE, End.BEING, "storage",
+            "A container becomes part of the being's inventory: open it anywhere, overflow lands in it.");
 
     /** What an end of the thread may be tied to. */
     public enum End {

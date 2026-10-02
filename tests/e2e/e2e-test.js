@@ -12,13 +12,20 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
 
 ;(async () => {
   const rcon = await Rcon.connect({ host: '127.0.0.1', port: 25575, password: 'test' })
-  const cmd = c => rcon.send(c)
+  // RCON replies carry legacy colour codes; strip them so text and numbers can be matched.
+  const cmd = async c => (await rcon.send(c)).replace(/§./g, '')
   const num = async c => parseFloat((await cmd(c)).split(': ').pop())
   const passes = async c => (await cmd(c)).includes('passed')
   const bot = mineflayer.createBot({ host: '127.0.0.1', port: 25565, username: BOT, version: '1.21.11' })
   const chat = []
-  bot.on('message', m => { const t = m.toString(); chat.push(t); if (!t.includes('Rcon')) console.log('  [chat]', t) })
+  bot.on('message', (m, position) => {
+    const t = m.toString()
+    if (position === 'game_info') { chat.push('[bar] ' + t); return }
+    chat.push(t); if (!t.includes('Rcon')) console.log('  [chat]', t)
+  })
   bot.on('actionBar', m => chat.push('[bar] ' + m.toString()))
+  // This mineflayer version does not decode NBT action bars into an event, so read the raw packet.
+  bot._client.on('action_bar', p => chat.push('[bar] ' + JSON.stringify(p.text)))
   await new Promise(r => bot.once('spawn', r))
   await sleep(1500)
   const saw = s => chat.some(c => c.includes(s))
@@ -43,8 +50,10 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
   // Far away: aim and right-click the air; the thread finds what you are looking at.
   const aimBlock = async pos => { await look(pos.offset(0.5, 0.99, 0.5)); bot.activateItem(); await sleep(350) }
   const aimEntity = async e => { await look(e.position.offset(0, e.height / 2, 0)); bot.activateItem(); await sleep(350) }
-  // Sneak + right-click ties the thread to yourself.
+  // Sneak + right-click ties the thread to yourself. Look at the sky first: a use packet while looking
+  // at a block is a block click for a real client, which this bot would not send.
   const tieSelf = async () => {
+    await bot.look(bot.entity.yaw, Math.PI / 2, true); await sleep(100)
     bot.setControlState('sneak', true); await sleep(150)
     bot.activateItem(); await sleep(250)
     bot.setControlState('sneak', false); await sleep(150)
@@ -61,6 +70,10 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
   }
   const pickMode = async id => { bot.chat(`/graft mode ${id}`); await sleep(350) }
   const severAll = async () => { bot.chat('/graft sever all'); await sleep(350) }
+  const refill = () => cmd(`graft spirit ${BOT} refill`)
+  const spirit = async () => parseInt((await cmd(`graft spirit ${BOT}`)).match(/(\d+)\/\d+ spirit/)?.[1] ?? '-1')
+  const nbt = path => cmd(`data get entity ${BOT} ${path}`)
+  await cmd(`graft level ${BOT} 1`); await refill()
 
   // ---------- 0. switching abilities ----------
   check('starts on Distance, with custom model', modeOfHand() === 'distance', `model=${modeOfHand()}`)
@@ -87,9 +100,12 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
   check('...without picking the sigil up', !bot.inventory.cursor ||
     !JSON.stringify(bot.inventory.cursor.components ?? []).includes('fool_sigil'))
   if (bot.currentWindow) {
-    const items = bot.currentWindow.slots.slice(0, 27)
-    check('the menu lists all nine abilities', [0, 1, 2, 3, 4, 5, 6, 7, 8].every(s => items[s]?.name === 'string'))
-    check('...and the player portrait', items[13]?.name === 'player_head')
+    const items = bot.currentWindow.slots.slice(0, 45)
+    check('the menu lists all thirteen abilities', [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15].every(s => items[s]?.name === 'string'))
+    check('...the player portrait', items[18]?.name === 'player_head')
+    check('...the Spirit Body toggle', items[20]?.name === 'soul_torch')
+    check('...and the four Distance arts, locked by level', items[22]?.name === 'leather_boots'
+      && [23, 24, 25].every(s => items[s]?.name === 'gray_dye'), [22, 23, 24, 25].map(s => items[s]?.name).join(','))
     await bot.clickWindow(8, 0, 0); await sleep(800) // Supernova: switches the thread already held
     // Read it from the server: the bot does not refresh hotbar slots while a container is open.
     check('clicking an ability in the menu sets the thread to it',
@@ -113,14 +129,27 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
   if (bot.currentWindow) { bot.closeWindow(bot.currentWindow); await sleep(300) }
   await pickMode('distance')
 
-  // ---------- 1. Distance ----------
+  // ---------- 0c. spirit, the HUD, and distance levels ----------
+  await sleep(600)
+  check('the spirit HUD shows above the hotbar while holding the thread', saw('"✦ "') && saw('/1000') && saw('Lv1 '))
+  bot.chat('/graft art gateway'); await sleep(400)
+  check('Gateway is locked at distance level 1', saw('Gateway needs distance level 2'))
+  const lvl = await cmd(`graft level ${BOT} 2`)
+  check('/graft level sets the distance level', lvl.includes('distance level 2'), lvl)
+  bot.chat('/graft art gateway'); await sleep(400)
+  check('...which unlocks Gateway', saw('Distance art: Gateway'))
+
+  // ---------- 1. Distance: Gateway (level 2) ----------
+  await refill()
   await cmd('setblock 4 -61 2 gold_block'); await cmd('setblock 30 -61 2 gold_block'); await sleep(300)
   await clickBlock(new Vec3(4, -61, 2))
   await cmd('setblock 30 -60 2 gold_block') // a raised pad, so the long sight line cannot graze the floor
   await aimBlock(new Vec3(30, -60, 2)) // 26 blocks away: tied at range, no walking needed
   await sleep(200)
-  check('distance graft created at range', saw('Distance #'))
+  check('gateway graft created at range', saw('Gateway #'))
   check('...and to the exact block aimed at', saw('Gold block at 30, -60, 2'))
+  const sp = await spirit()
+  check('grafting costs spirit', sp > 0 && sp < 1000, `spirit=${sp}`)
   await cmd(`tp ${BOT} 4.5 -60 2.5`); await sleep(900)
   check('distance carries player', Math.abs(bot.entity.position.x - 30.5) < 1, `pos=${bot.entity.position}`)
   await cmd(`tp ${BOT} 30.5 -60 5.5`); await sleep(500)
@@ -189,7 +218,7 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
   await severAll()
 
   // ---------- 5. Death & Return ----------
-  await pickMode('return')
+  await refill(); await pickMode('return')
   await cmd('setblock 2 -61 8 emerald_block')
   await cmd(`tp ${BOT} 3.5 -60 9.5`); await sleep(400)
   await tieSelf(); await clickBlock(new Vec3(2, -61, 8))
@@ -262,10 +291,10 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
   await severAll()
 
   // ---------- 10. Supernova ----------
-  await pickMode('supernova')
+  await refill(); await pickMode('supernova')
   await cmd(`tp ${BOT} 4.5 -60 4.5`); await sleep(300)
   pig = await fresh('pig', 26.5, 6.5, ',Health:10,NoGravity:1')
-  await cmd('summon cow 28.5 -60 6.5 {NoAI:1,Silent:1,Health:10}'); await sleep(300)
+  await cmd('kill @e[type=cow]'); await cmd('summon cow 28.5 -60 6.5 {NoAI:1,Silent:1,Health:10,Tags:["bystander"]}'); await sleep(300)
   await cmd('setblock 6 -60 4 glowstone')
   await clickBlock(new Vec3(6, -60, 4)); await aimEntity(pig())
   check('supernova ignited at range', saw('Supernova #'))
@@ -276,20 +305,151 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
   for (let i = 0; i < 40 && pigAlive; i++) {
     await sleep(250)
     pigAlive = await passes('execute if entity @e[type=pig]')
-    const cowHp = await num('data get entity @e[type=cow,limit=1] Health')
-    cowHit = cowHit || !(await passes('execute if entity @e[type=cow]')) || cowHp < 10
+    const cowHp = await num('data get entity @e[tag=bystander,limit=1] Health')
+    cowHit = cowHit || !(await passes('execute if entity @e[tag=bystander]')) || cowHp < 10
   }
   await sleep(2000) // shockwave
+  cowHit = cowHit || !(await passes('execute if entity @e[tag=bystander]'))
+    || (await num('data get entity @e[tag=bystander,limit=1] Health')) < 10
   check('supernova: the target was destroyed', !pigAlive)
   check('supernova: bystanders in the blast were hit too', cowHit)
   check('supernova: the caster is never harmed', bot.health === hpN, `hp ${hpN} -> ${bot.health}`)
   check('supernova: ends after detonating', saw(`graft #${supernovaId} has fulfilled its purpose`), `#${supernovaId}`)
 
+  // ---------- 11. Distance: Step (level 1) ----------
+  await cmd(`graft level ${BOT} 1`); await refill()
+  await cmd('kill @e[type=!player]')
+  await cmd(`tp ${BOT} 4.5 -60 4.5 -90 0`); await sleep(400)
+  await pickMode('distance')
+  bot.chat('/graft art step'); await sleep(300)
+  bot.chat('28 -60 10'); await sleep(500) // coordinates typed in chat
+  check('Step is armed from coordinates in chat', saw('your next step lands at 28, -60, 10'))
+  bot.setControlState('forward', true); await sleep(500); bot.setControlState('forward', false); await sleep(800)
+  check('Step: the next step lands on that coordinate',
+    Math.abs(bot.entity.position.x - 28.5) < 2 && Math.abs(bot.entity.position.z - 10.5) < 1, `pos=${bot.entity.position}`)
+  const travel = await cmd(`graft level ${BOT}`)
+  const walked = parseInt(travel.match(/\((\d+)\/500/)?.[1] ?? '0')
+  check('Step: the distance travelled counts toward the next level', walked > 20, travel)
+
+  // ---------- 12. Distance: Enemy Step (level 3) ----------
+  await cmd(`graft level ${BOT} 3`); await refill()
+  await cmd(`tp ${BOT} 4.5 -60 4.5`); await sleep(300)
+  bot.chat('/graft art enemy'); await sleep(300)
+  pig = await fresh('pig', 10.5, 4.5)
+  await cmd('setblock 20 -60 10 lapis_block'); await sleep(200)
+  await clickEntity(pig()); await aimBlock(new Vec3(20, -60, 10))
+  check('enemy step graft created', saw('Enemy Step #'))
+  await cmd('tp @e[type=pig] 11.5 -60 4.5'); await sleep(500)
+  const pigAt = await num('data get entity @e[type=pig,limit=1] Pos[0]')
+  check("Enemy Step: the pig's next step lands on the chosen block", Math.abs(pigAt - 20.5) < 0.6, `pig x=${pigAt}`)
+  await cmd('setblock 20 -60 10 air'); await severAll()
+
+  // ---------- 13. Distance: Infinity (level 4) ----------
+  await cmd(`graft level ${BOT} 4`); await refill()
+  bot.chat('/graft art infinity'); await sleep(300)
+  await look(bot.entity.position.offset(0, 30, 0)); bot.activateItem(); await sleep(400)
+  check('Infinity is raised', saw('surrounds you'))
+  await cmd('summon zombie 6.5 -60 4.5 {NoAI:1,Silent:1}'); await sleep(200)
+  const hpI = bot.health, spI = await spirit()
+  await cmd(`damage ${BOT} 4 minecraft:mob_attack by @e[type=zombie,limit=1]`); await sleep(400)
+  check('Infinity: the attack never arrives', bot.health === hpI, `hp ${hpI} -> ${bot.health}`)
+  check('Infinity: holding it drains spirit, more for the blocked hit', (await spirit()) <= spI - 30, `spirit ${spI} -> ${await spirit()}`)
+  bot.activateItem(); await sleep(300)
+  await cmd('kill @e[type=zombie]')
+
+  // ---------- 14. Spirit Body ----------
+  await refill(); await cmd(`effect give ${BOT} instant_health 1 10`); await sleep(300)
+  bot.chat('/graft body'); await sleep(500)
+  check('Spirit Body: the player can fly', (await nbt('abilities.mayfly')).includes('1b'))
+  const hpB = bot.health
+  await cmd(`damage ${BOT} 4 minecraft:generic`); await sleep(400)
+  check('Spirit Body: physical damage does nothing', bot.health === hpB, `hp ${hpB} -> ${bot.health}`)
+  await cmd(`damage ${BOT} 3 minecraft:magic`); await sleep(400)
+  check('Spirit Body: magic damage still hurts', bot.health < hpB, `hp ${hpB} -> ${bot.health}`)
+  await pickMode('nature'); await cmd('setblock 6 -60 6 slime_block')
+  await cmd(`tp ${BOT} 4.5 -60 6.5`); await sleep(300)
+  await clickBlock(new Vec3(6, -60, 6)); await tieSelf()
+  check('Spirit Body: using an ability returns you to your main body',
+    (await nbt('abilities.mayfly')).includes('0b') && saw('return to your main body'))
+  await severAll(); await cmd('setblock 6 -60 6 air')
+
+  // ---------- 15. Life ----------
+  await refill(); await pickMode('life')
+  await cmd(`tp ${BOT} 10.5 -60 8.5`); await sleep(300)
+  pig = await fresh('pig', 13.5, 8.5)
+  await cmd('summon cow 13.5 -60 11.5 {NoAI:1,Silent:1}'); await sleep(300)
+  await clickEntity(pig()); await clickEntity(bot.nearestEntity(e => e.name === 'cow'))
+  check('life graft created', saw('Life #'))
+  await cmd('damage @e[type=cow,limit=1] 100 minecraft:generic'); await sleep(600)
+  check("Life: killing the vessel kills the one whose life it holds", !(await passes('execute if entity @e[type=pig]')))
+  const seq = await cmd(`graft sequence ${BOT} 3`)
+  check('/graft sequence sets a Beyonder sequence', seq.includes('Sequence 3'), seq)
+  await cmd(`graft sequence ${BOT} 1`)
+
+  // ---------- 16. Location ----------
+  await refill(); await pickMode('location')
+  await cmd('fill 72 -61 56 88 -61 64 stone'); await cmd(`tp ${BOT} 80.5 -60 60.5`); await sleep(800)
+  await cmd('setblock 60 -60 60 diamond_block'); await cmd('setblock 60 -58 60 red_wool')
+  await cmd('setblock 61 -60 61 chest'); await cmd('item replace block 61 -60 61 container.0 with minecraft:diamond 5')
+  await cmd('setblock 100 -60 60 emerald_block'); await sleep(300)
+  await aimBlock(new Vec3(60, -60, 60)); await aimBlock(new Vec3(100, -60, 60)); await sleep(400)
+  check('location graft created', saw('Location #'))
+  check('Location: the areas traded places', await passes('execute if block 100 -58 60 red_wool')
+    && await passes('execute if block 60 -60 60 emerald_block'))
+  check('Location: chests and their contents move too', (await cmd('data get block 101 -60 61 Items')).includes('diamond'))
+  await severAll(); await sleep(300)
+  check('Location: cutting the thread puts everything back', await passes('execute if block 60 -58 60 red_wool')
+    && await passes('execute if block 100 -60 60 emerald_block') && (await cmd('data get block 61 -60 61 Items')).includes('diamond'))
+  await cmd('fill 52 -65 52 108 -48 68 air')
+
+  // ---------- 17. Storage ----------
+  await refill(); await pickMode('storage')
+  await cmd(`tp ${BOT} 4.5 -60 10.5`); await sleep(300)
+  await cmd('setblock 6 -60 12 chest'); await cmd('item replace block 6 -60 12 container.0 with minecraft:emerald 3')
+  await clickBlock(new Vec3(6, -60, 12)); await tieSelf()
+  check('storage graft created', saw('Storage #'))
+  await cmd(`tp ${BOT} 30.5 -60 2.5`); await sleep(300)
+  bot.chat('/graft storage'); await sleep(700)
+  check('Storage: open the grafted chest from anywhere', bot.currentWindow?.slots?.[0]?.name === 'emerald')
+  if (bot.currentWindow) { bot.closeWindow(bot.currentWindow); await sleep(300) }
+  for (let i = 0; i < 36; i++) if (i !== bot.quickBarSlot && i !== 9) await cmd(`item replace entity ${BOT} container.${i} with minecraft:dirt 64`)
+  await cmd(`item replace entity ${BOT} weapon.offhand with minecraft:dirt 64`)
+  await cmd(`summon item 30.5 -59.5 2.5 {Item:{id:"minecraft:cobblestone",count:7},PickupDelay:0}`); await sleep(1200)
+  check('Storage: what does not fit flows into the grafted chest',
+    await passes('execute if block 6 -60 12 chest{Items:[{id:"minecraft:cobblestone"}]}'))
+  await cmd(`clear ${BOT} minecraft:dirt`); await severAll()
+
+  // ---------- 18. Ability ----------
+  await refill(); await pickMode('ability')
+  await cmd(`tp ${BOT} 10.5 -60 8.5`); await sleep(300)
+  pig = await fresh('pig', 13.5, 8.5)
+  await clickEntity(pig()); await tieSelf()
+  check("ability graft created (a creature's power onto you)", saw('Ability: Gentle Vitality #'))
+  await sleep(1300)
+  check("Ability: you wield the creature's trait", (await nbt('active_effects')).includes('regeneration'))
+  const spA = await spirit(); await sleep(2100)
+  check('Ability: it drains spirit every second', (await spirit()) < spA + 8, `spirit ${spA} -> ${await spirit()}`)
+  await severAll()
+  const audrey = mineflayer.createBot({ host: '127.0.0.1', port: 25565, username: 'Audrey', version: '1.21.11' })
+  await new Promise(r => audrey.once('spawn', r)); await sleep(1500)
+  await cmd('tp Audrey 13.5 -60 8.5'); await cmd('clear Audrey'); await sleep(600)
+  await refill(); await tieSelf()
+  const aud = bot.nearestEntity(e => e.type === 'player' && e.username === 'Audrey')
+  if (aud) await clickEntity(aud)
+  await sleep(500)
+  check('Ability: your own power is lent to another player as a borrowed thread',
+    audrey.inventory.items().some(i => i.name === 'string'), audrey.inventory.items().map(i => i.name).join(','))
+  await severAll(); await sleep(500)
+  check('Ability: the borrowed thread vanishes when the graft ends', !audrey.inventory.items().some(i => i.name === 'string'))
+  audrey.quit()
+  await cmd(`graft level ${BOT} 1`)
+
   // ---------- misc ----------
   bot.chat('/graft list'); await sleep(300)
   check('list works', saw('You hold no grafts') || saw('Your grafts'))
   const help = await cmd('graft help')
-  check('console help lists every ability', ['Distance', 'Exchange', 'Enmity', 'Gravity', 'Puppetry', 'Supernova']
+  check('console help lists every ability', ['Distance', 'Exchange', 'Enmity', 'Gravity', 'Puppetry', 'Supernova',
+    'Life', 'Location', 'Ability', 'Storage']
     .every(m => help.includes(m)))
 
   const failed = results.filter(r => !r.ok)
