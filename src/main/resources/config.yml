@@ -30,6 +30,13 @@ particles:
   # Multiplier for every particle effect. 0.5 = half, 2.0 = double (max 4.0).
   density: 1.0
 
+# The pathway book: open it by clicking the Fool sigil in your inventory.
+pathway-book:
+  # Give every player the sigil and keep it in their inventory.
+  sigil: true
+  # Inventory slot it lives in: 0-8 hotbar, 9-35 storage (9 = top-left, next to the crafting grid).
+  sigil-slot: 9
+
 # The texture pack that gives every ability its own icon.
 # By default the plugin hosts it itself on a small built-in web server.
 resource-pack:

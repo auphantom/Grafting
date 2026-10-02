@@ -3,15 +3,27 @@ plugins {
 }
 
 group = 'io.github.auphantom'
-version = '2.0.0'
+version = '2.1.0'
 
 repositories {
     mavenCentral()
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
 }
 
+// The texture-pack generator lives in its own source set: it is build tooling, not plugin code,
+// and never ends up in the plugin jar (only the zip it produces does).
+sourceSets {
+    packgen {
+        java.srcDir 'tools/packgen/src/main/java'
+    }
+}
+
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -19,20 +31,25 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }
 
-// Draws the ability icons and zips them into a resource pack (tools/PackGenerator.java).
-// Java runs single-file programs straight from source, so no extra source set is needed.
+// Draws every texture and zips the resource pack (see tools/packgen).
 def packDir = layout.buildDirectory.dir('pack')
-def packJava = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
-def generatePack = tasks.register('generatePack', Exec) {
+def generatePack = tasks.register('generatePack', JavaExec) {
+    group = 'build'
     description = 'Generates the Grafting texture pack.'
-    def source = file('tools/PackGenerator.java')
-    inputs.file source
+    classpath = sourceSets.packgen.runtimeClasspath
+    mainClass = 'io.github.auphantom.grafting.packgen.PackGenerator'
+    jvmArgs '-Djava.awt.headless=true'
     outputs.dir packDir
-    doFirst { packDir.get().asFile.mkdirs() }
-    executable = packJava.get().executablePath.asFile.absolutePath
-    args '-Djava.awt.headless=true', source.absolutePath,
-            packDir.get().file('grafting-pack.zip').asFile.absolutePath,
-            packDir.get().asFile.absolutePath
+    args packDir.get().file('grafting-pack.zip').asFile.absolutePath, packDir.get().asFile.absolutePath
+}
+
+// Regenerates the preview images used in the README.
+tasks.register('updateDocs', Copy) {
+    group = 'documentation'
+    description = 'Copies the generated icon and book previews into docs/images.'
+    dependsOn generatePack
+    from(packDir) { include '*.png' }
+    into 'docs/images'
 }
 
 processResources {

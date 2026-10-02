@@ -21,6 +21,7 @@ public abstract class Graft {
     private final Anchor first;
     private final Anchor second;
     private final long expiresAt;
+    private long createdAt;
     private boolean spent;
 
     protected Graft(int id, Mode mode, UUID owner, Anchor first, Anchor second, long expiresAt) {
@@ -105,6 +106,15 @@ public abstract class Graft {
 
     public final long expiresAt() {
         return expiresAt;
+    }
+
+    /** Tick the graft was registered on; set by the manager. */
+    public final long createdAt() {
+        return createdAt;
+    }
+
+    final void markCreated(long tick) {
+        createdAt = tick;
     }
 
     /** Both ends still exist. Grafts that consume one of their ends on purpose override this. */

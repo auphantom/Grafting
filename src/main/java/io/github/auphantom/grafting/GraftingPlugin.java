@@ -1,5 +1,13 @@
 package io.github.auphantom.grafting;
 
+import io.github.auphantom.grafting.ui.PathwayBook;
+import io.github.auphantom.grafting.command.GraftCommand;
+import io.github.auphantom.grafting.item.Sigil;
+import io.github.auphantom.grafting.item.ThreadItem;
+import io.github.auphantom.grafting.listener.SigilListener;
+import io.github.auphantom.grafting.listener.ThreadListener;
+import io.github.auphantom.grafting.pack.PackServer;
+import io.github.auphantom.grafting.util.Fx;
 import io.github.auphantom.grafting.graft.GraftFactory;
 import io.github.auphantom.grafting.graft.GraftManager;
 import org.bukkit.command.PluginCommand;
@@ -21,27 +29,35 @@ public final class GraftingPlugin extends JavaPlugin {
         saveDefaultConfig();
         Fx.setDensity(getConfig().getDouble("particles.density", 1.0));
         ThreadItem.init(this);
+        Sigil.init(this);
 
         manager = new GraftManager(this);
         GraftFactory factory = new GraftFactory(this, manager);
         ThreadListener listener = new ThreadListener(this, manager, factory);
-        AbilityMenu menu = new AbilityMenu(listener);
-        listener.setMenu(menu);
+        PathwayBook book = new PathwayBook(this, manager, listener);
+        SigilListener sigils = new SigilListener(this, manager, book);
+        listener.setBook(book);
         getServer().getPluginManager().registerEvents(listener, this);
-        getServer().getPluginManager().registerEvents(menu, this);
+        getServer().getPluginManager().registerEvents(book, this);
+        getServer().getPluginManager().registerEvents(sigils, this);
 
         packServer = new PackServer(this);
         if (packServer.start()) getServer().getPluginManager().registerEvents(packServer, this);
 
         PluginCommand command = getCommand("graft");
         if (command != null) {
-            GraftCommand executor = new GraftCommand(manager, listener, menu, packServer);
+            GraftCommand executor = new GraftCommand(manager, listener, book, packServer);
             command.setExecutor(executor);
             command.setTabCompleter(executor);
         }
 
         manager.start();
         getServer().getScheduler().runTaskTimer(this, listener::tickPending, 1L, 1L);
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            sigils.tick();
+            book.tick();
+        }, 20L, 20L);
+        getServer().getOnlinePlayers().forEach(sigils::ensure); // after /reload
     }
 
     @Override

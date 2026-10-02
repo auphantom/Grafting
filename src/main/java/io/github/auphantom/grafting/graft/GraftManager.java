@@ -1,8 +1,8 @@
 package io.github.auphantom.grafting.graft;
 
-import io.github.auphantom.grafting.Fx;
+import io.github.auphantom.grafting.util.Fx;
 import io.github.auphantom.grafting.GraftingPlugin;
-import io.github.auphantom.grafting.Text;
+import io.github.auphantom.grafting.util.Text;
 import io.github.auphantom.grafting.anchor.Anchor;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -85,6 +85,7 @@ public final class GraftManager {
             end(owned.get(i), "was let go to make room for a new one");
         }
         grafts.add(graft);
+        graft.markCreated(tick);
         try {
             graft.onStart();
         } catch (RuntimeException ex) {

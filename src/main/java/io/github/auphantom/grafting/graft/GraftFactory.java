@@ -4,6 +4,16 @@ import io.github.auphantom.grafting.GraftingPlugin;
 import io.github.auphantom.grafting.anchor.Anchor;
 import io.github.auphantom.grafting.anchor.BlockAnchor;
 import io.github.auphantom.grafting.anchor.EntityAnchor;
+import io.github.auphantom.grafting.graft.types.DistanceGraft;
+import io.github.auphantom.grafting.graft.types.EnmityGraft;
+import io.github.auphantom.grafting.graft.types.ExchangeGraft;
+import io.github.auphantom.grafting.graft.types.FateGraft;
+import io.github.auphantom.grafting.graft.types.GravityGraft;
+import io.github.auphantom.grafting.graft.types.Nature;
+import io.github.auphantom.grafting.graft.types.NatureGraft;
+import io.github.auphantom.grafting.graft.types.PuppetGraft;
+import io.github.auphantom.grafting.graft.types.ReturnGraft;
+import io.github.auphantom.grafting.graft.types.SupernovaGraft;
 
 import java.util.UUID;
 
