@@ -3,8 +3,6 @@ package io.github.auphantom.grafting.packgen;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.zip.ZipOutputStream;
 
 import static io.github.auphantom.grafting.packgen.Pixels.*;
@@ -21,13 +19,9 @@ final class PathwayArt {
     static final Color GOLD = new Color(0xd9a646);
     static final Color GOLD_DK = new Color(0x8c6224);
 
-    /** Writes every pathway asset into the pack and returns the item icons for the preview sheet. */
-    static Map<String, BufferedImage> write(ZipOutputStream zip) throws IOException {
-        Map<String, BufferedImage> previews = new LinkedHashMap<>();
-
-        BufferedImage sigil = sigil();
-        PackGenerator.itemModel(zip, "fool_sigil", sigil, "generated");
-        previews.put("fool_sigil", sigil);
+    /** Writes every pathway asset into the pack. */
+    static void write(ZipOutputStream zip) throws IOException {
+        PackGenerator.itemModel(zip, "fool_sigil", sigil(), "generated");
 
         png(zip, "assets/grafting/textures/font/seg_full.png", segment(true));
         png(zip, "assets/grafting/textures/font/seg_empty.png", segment(false));
@@ -47,7 +41,6 @@ final class PathwayArt {
         text(zip, "assets/grafting/textures/gui/sprites/tooltip/mystery_frame.png.mcmeta", """
                 { "gui": { "scaling": { "type": "nine_slice", "width": 100, "height": 100, "border": 10, "stretch_inner": true } } }
                 """);
-        return previews;
     }
 
     // -------------------------------------------------------------- the Fool sigil

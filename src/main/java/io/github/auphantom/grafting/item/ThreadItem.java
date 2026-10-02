@@ -20,12 +20,10 @@ import java.util.List;
  * <p>
  * It is a plain string, tagged through the persistent data container so it can never
  * be confused with ordinary string. The selected mode is stored on the item itself,
- * and the item's model is swapped to {@code grafting:<mode>} so the resource pack can
- * give every ability its own texture. Without the pack it simply looks like string.
+ * and the item's model is swapped to a vanilla item that fits the ability (an ender
+ * pearl for Distance, a nether star for Supernova...), so no texture pack is needed.
  */
 public final class ThreadItem {
-
-    public static final String NAMESPACE = "grafting";
 
     private static NamespacedKey key;
     private static NamespacedKey modeKey;
@@ -55,7 +53,7 @@ public final class ThreadItem {
     public static ItemStack icon(Mode mode) {
         ItemStack item = new ItemStack(Material.STRING);
         ItemMeta meta = item.getItemMeta();
-        if (customModels) meta.setItemModel(new NamespacedKey(NAMESPACE, mode.id()));
+        if (customModels) meta.setItemModel(NamespacedKey.minecraft(mode.model()));
         item.setItemMeta(meta);
         return item;
     }
@@ -107,7 +105,7 @@ public final class ThreadItem {
     public static void setMode(ItemStack item, Mode mode) {
         ItemMeta meta = item.getItemMeta();
         meta.getPersistentDataContainer().set(modeKey, PersistentDataType.STRING, mode.id());
-        if (customModels) meta.setItemModel(new NamespacedKey(NAMESPACE, mode.id()));
+        if (customModels) meta.setItemModel(NamespacedKey.minecraft(mode.model()));
         meta.displayName(Text.mm("<gradient:#7b5cff:#d9ccff>Thread of Grafting</gradient> <dark_gray>·</dark_gray> "
                 + mode.tag() + mode.display()).decoration(TextDecoration.ITALIC, false));
 

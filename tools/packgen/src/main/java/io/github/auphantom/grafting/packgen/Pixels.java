@@ -14,7 +14,7 @@ import java.util.zip.ZipOutputStream;
 /** Small pixel-art and zip helpers shared by the pack generators. */
 final class Pixels {
 
-    /** Item icons are 32x32. */
+    /** The sigil is 32x32. */
     static final int S = 32;
 
     private Pixels() {

@@ -40,16 +40,7 @@ def generatePack = tasks.register('generatePack', JavaExec) {
     mainClass = 'io.github.auphantom.grafting.packgen.PackGenerator'
     jvmArgs '-Djava.awt.headless=true'
     outputs.dir packDir
-    args packDir.get().file('grafting-pack.zip').asFile.absolutePath, packDir.get().asFile.absolutePath
-}
-
-// Regenerates the preview images used in the README.
-tasks.register('updateDocs', Copy) {
-    group = 'documentation'
-    description = 'Copies the generated icon preview into docs/images.'
-    dependsOn generatePack
-    from(packDir) { include '*.png' }
-    into 'docs/images'
+    args packDir.get().file('grafting-pack.zip').asFile.absolutePath
 }
 
 processResources {
