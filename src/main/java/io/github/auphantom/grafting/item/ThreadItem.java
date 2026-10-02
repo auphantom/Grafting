@@ -88,7 +88,7 @@ public final class ThreadItem {
         lore.add(lore("<white>Right-click</white> <gray>a block or being to tie the thread"));
         lore.add(lore("<white>Right-click air</white> <gray>to tie it to yourself"));
         lore.add(lore("<white>Left-click</white> <gray>to switch ability"));
-        lore.add(lore("<white>Sneak + left-click</white> <gray>to open the pathway book"));
+        lore.add(lore("<white>Sneak + left-click</white> <gray>to open the pathway menu"));
         lore.add(lore("<white>Sneak + right-click air</white> <gray>to let go"));
         meta.lore(lore);
         meta.setEnchantmentGlintOverride(true);

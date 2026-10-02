@@ -3,7 +3,7 @@ package io.github.auphantom.grafting.command;
 import io.github.auphantom.grafting.item.ThreadItem;
 import io.github.auphantom.grafting.listener.ThreadListener;
 import io.github.auphantom.grafting.pack.PackServer;
-import io.github.auphantom.grafting.ui.PathwayBook;
+import io.github.auphantom.grafting.ui.PathwayMenu;
 import io.github.auphantom.grafting.util.Text;
 
 import io.github.auphantom.grafting.graft.Graft;
@@ -23,14 +23,14 @@ import java.util.Map;
 /** {@code /graft give|mode|menu|list|sever|pack|help} */
 public final class GraftCommand implements TabExecutor {
 
-    private static final List<String> SUBS = List.of("book", "give", "mode", "list", "sever", "pack", "help");
+    private static final List<String> SUBS = List.of("menu", "give", "mode", "list", "sever", "pack", "help");
 
     private final GraftManager manager;
     private final ThreadListener threads;
-    private final PathwayBook menu;
+    private final PathwayMenu menu;
     private final PackServer pack;
 
-    public GraftCommand(GraftManager manager, ThreadListener threads, PathwayBook menu, PackServer pack) {
+    public GraftCommand(GraftManager manager, ThreadListener threads, PathwayMenu menu, PackServer pack) {
         this.manager = manager;
         this.threads = threads;
         this.menu = menu;
@@ -43,7 +43,7 @@ public final class GraftCommand implements TabExecutor {
         switch (sub) {
             case "give" -> give(sender, args);
             case "mode" -> mode(sender, args);
-            case "book", "menu" -> {
+            case "menu" -> {
                 if (sender instanceof Player p) menu.open(p);
             }
             case "list" -> list(sender);
@@ -152,7 +152,7 @@ public final class GraftCommand implements TabExecutor {
         Text.send(sender, "<gray>Reassembly: connect two things that should never touch.");
         sender.sendMessage(Text.mm(" <light_purple>/" + label + " give [player]</light_purple> <dark_gray>-</dark_gray> <gray>get the Thread of Grafting"));
         sender.sendMessage(Text.mm(" <light_purple>/" + label + " mode <ability></light_purple> <dark_gray>-</dark_gray> <gray>switch ability"));
-        sender.sendMessage(Text.mm(" <light_purple>/" + label + " book</light_purple> <dark_gray>-</dark_gray> <gray>open the pathway book (or click the sigil in your inventory)"));
+        sender.sendMessage(Text.mm(" <light_purple>/" + label + " menu</light_purple> <dark_gray>-</dark_gray> <gray>open the pathway menu (or click the sigil in your inventory)"));
         sender.sendMessage(Text.mm(" <light_purple>/" + label + " list</light_purple> <dark_gray>-</dark_gray> <gray>see your active grafts"));
         sender.sendMessage(Text.mm(" <light_purple>/" + label + " sever [id|all]</light_purple> <dark_gray>-</dark_gray> <gray>cut a graft"));
         sender.sendMessage(Text.mm(" <light_purple>/" + label + " pack</light_purple> <dark_gray>-</dark_gray> <gray>re-send the texture pack"));

@@ -1,7 +1,7 @@
 package io.github.auphantom.grafting.listener;
 
 import io.github.auphantom.grafting.item.Sigil;
-import io.github.auphantom.grafting.ui.PathwayBook;
+import io.github.auphantom.grafting.ui.PathwayMenu;
 
 import io.github.auphantom.grafting.GraftingPlugin;
 import io.github.auphantom.grafting.graft.GraftManager;
@@ -26,31 +26,31 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
 /**
- * Keeps every player's pathway sigil in its slot and turns clicks on it into opening the book.
+ * Keeps every player's pathway sigil in its slot and turns clicks on it into opening the menu.
  * <p>
  * The sigil lives in a fixed inventory slot (by default the top-left storage slot, which sits
  * right beside the crafting grid when the inventory is open). It cannot be dropped, moved,
  * swapped, stored or lost on death. Clicking it in the inventory, or right-clicking while
- * holding it, opens the pathway book.
+ * holding it, opens the pathway menu.
  */
 public final class SigilListener implements Listener {
 
     private final GraftingPlugin plugin;
     private final GraftManager grafts;
-    private final PathwayBook book;
+    private final PathwayMenu menu;
 
-    public SigilListener(GraftingPlugin plugin, GraftManager grafts, PathwayBook book) {
+    public SigilListener(GraftingPlugin plugin, GraftManager grafts, PathwayMenu menu) {
         this.plugin = plugin;
         this.grafts = grafts;
-        this.book = book;
+        this.menu = menu;
     }
 
     private boolean enabled() {
-        return plugin.getConfig().getBoolean("pathway-book.sigil", true);
+        return plugin.getConfig().getBoolean("pathway-menu.sigil", true);
     }
 
     private int slot() {
-        int s = plugin.getConfig().getInt("pathway-book.sigil-slot", 9);
+        int s = plugin.getConfig().getInt("pathway-menu.sigil-slot", 9);
         return Math.max(0, Math.min(35, s));
     }
 
@@ -90,7 +90,7 @@ public final class SigilListener implements Listener {
         }
     }
 
-    // ------------------------------------------------------------------ opening the book
+    // ------------------------------------------------------------------ opening the menu
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onInventoryClick(InventoryClickEvent event) {
@@ -108,7 +108,7 @@ public final class SigilListener implements Listener {
                 && event.getClick() != ClickType.CONTROL_DROP) {
             // Open on the next tick: opening a window from inside a click on another one is not safe.
             Bukkit.getScheduler().runTask(plugin, () -> {
-                if (player.isOnline()) book.open(player);
+                if (player.isOnline()) menu.open(player);
             });
         }
     }
@@ -123,7 +123,7 @@ public final class SigilListener implements Listener {
         if (event.getHand() != EquipmentSlot.HAND || !Sigil.is(event.getItem())) return;
         if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             event.setCancelled(true);
-            book.open(event.getPlayer());
+            menu.open(event.getPlayer());
         }
     }
 

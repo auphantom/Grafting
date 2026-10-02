@@ -21,7 +21,7 @@ import static io.github.auphantom.grafting.packgen.Pixels.*;
  * bundled into the plugin jar and served to players by the plugin.
  * <pre>
  *   args[0]  output zip            (build/pack/grafting-pack.zip)
- *   args[1]  optional preview dir  (writes icons.png and book.png, used in the README)
+ *   args[1]  optional preview dir  (writes icons.png, used in the README)
  * </pre>
  */
 public final class PackGenerator {
@@ -57,7 +57,6 @@ public final class PackGenerator {
 
         if (previewDir != null) {
             Files.createDirectories(previewDir);
-            ImageIO.write(scale(PathwayArt.book(), 4), "png", previewDir.resolve("book.png").toFile());
             ImageIO.write(sheet(preview), "png", previewDir.resolve("icons.png").toFile());
         }
         System.out.println("Wrote " + out + " (" + preview.size() + " item textures)");

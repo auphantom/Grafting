@@ -1,6 +1,6 @@
 package io.github.auphantom.grafting;
 
-import io.github.auphantom.grafting.ui.PathwayBook;
+import io.github.auphantom.grafting.ui.PathwayMenu;
 import io.github.auphantom.grafting.command.GraftCommand;
 import io.github.auphantom.grafting.item.Sigil;
 import io.github.auphantom.grafting.item.ThreadItem;
@@ -34,11 +34,11 @@ public final class GraftingPlugin extends JavaPlugin {
         manager = new GraftManager(this);
         GraftFactory factory = new GraftFactory(this, manager);
         ThreadListener listener = new ThreadListener(this, manager, factory);
-        PathwayBook book = new PathwayBook(this, manager, listener);
-        SigilListener sigils = new SigilListener(this, manager, book);
-        listener.setBook(book);
+        PathwayMenu menu = new PathwayMenu(this, manager, listener);
+        SigilListener sigils = new SigilListener(this, manager, menu);
+        listener.setMenu(menu);
         getServer().getPluginManager().registerEvents(listener, this);
-        getServer().getPluginManager().registerEvents(book, this);
+        getServer().getPluginManager().registerEvents(menu, this);
         getServer().getPluginManager().registerEvents(sigils, this);
 
         packServer = new PackServer(this);
@@ -46,7 +46,7 @@ public final class GraftingPlugin extends JavaPlugin {
 
         PluginCommand command = getCommand("graft");
         if (command != null) {
-            GraftCommand executor = new GraftCommand(manager, listener, book, packServer);
+            GraftCommand executor = new GraftCommand(manager, listener, menu, packServer);
             command.setExecutor(executor);
             command.setTabCompleter(executor);
         }
@@ -55,7 +55,7 @@ public final class GraftingPlugin extends JavaPlugin {
         getServer().getScheduler().runTaskTimer(this, listener::tickPending, 1L, 1L);
         getServer().getScheduler().runTaskTimer(this, () -> {
             sigils.tick();
-            book.tick();
+            menu.tick();
         }, 20L, 20L);
         getServer().getOnlinePlayers().forEach(sigils::ensure); // after /reload
     }

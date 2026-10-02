@@ -70,7 +70,7 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
   await pickMode('distance')
   check('/graft mode works', modeOfHand() === 'distance')
 
-  // ---------- 0b. the pathway sigil and book ----------
+  // ---------- 0b. the pathway sigil and menu ----------
   const sigilSlot = 9 // inventory slot 9 = top-left storage slot
   const sigil = bot.inventory.slots[sigilSlot]
   const sigilModel = sigil?.components?.find?.(c => c.type === 'item_model')
@@ -80,36 +80,36 @@ const check = (name, ok, extra = '') => { results.push({ name, ok }); console.lo
     JSON.stringify(sigil?.components ?? []).includes('Attendant of Mysteries'))
   await cmd(`item replace entity ${BOT} container.${sigilSlot} with minecraft:dirt`); await sleep(1500)
   check('the sigil comes back if removed', JSON.stringify(bot.inventory.slots[sigilSlot]?.components ?? []).includes('fool_sigil'))
-  const bookOpen = () => JSON.stringify(bot.currentWindow?.title ?? '').includes('Reassembly')
+  const menuOpen = () => JSON.stringify(bot.currentWindow?.title ?? '').includes('Reassembly')
   // Click the sigil in the inventory (the player's own inventory window is id 0).
   await bot.clickWindow(sigilSlot, 0, 0); await sleep(800)
-  check('clicking the sigil opens the pathway book', bookOpen(), JSON.stringify(bot.currentWindow?.title ?? '').slice(0, 60))
+  check('clicking the sigil opens the pathway menu', menuOpen(), JSON.stringify(bot.currentWindow?.title ?? '').slice(0, 60))
   check('...without picking the sigil up', !bot.inventory.cursor ||
     !JSON.stringify(bot.inventory.cursor.components ?? []).includes('fool_sigil'))
   if (bot.currentWindow) {
-    const items = bot.currentWindow.slots.slice(0, 54)
-    check('the book lists all nine abilities', [14, 15, 16, 23, 24, 25, 32, 33, 34].every(s => items[s]?.name === 'string'))
-    check('...and the player portrait', items[10]?.name === 'player_head')
-    await bot.clickWindow(34, 0, 0); await sleep(800) // Supernova: switches the thread already held
+    const items = bot.currentWindow.slots.slice(0, 27)
+    check('the menu lists all nine abilities', [0, 1, 2, 3, 4, 5, 6, 7, 8].every(s => items[s]?.name === 'string'))
+    check('...and the player portrait', items[13]?.name === 'player_head')
+    await bot.clickWindow(8, 0, 0); await sleep(800) // Supernova: switches the thread already held
     // Read it from the server: the bot does not refresh hotbar slots while a container is open.
-    check('clicking an ability in the book sets the thread to it',
+    check('clicking an ability in the menu sets the thread to it',
       (await cmd(`data get entity ${BOT} SelectedItem.components."minecraft:item_model"`)).includes('grafting:supernova'))
     bot.closeWindow(bot.currentWindow); await sleep(300)
   }
   // Drawing a thread when you have none.
   await cmd(`clear ${BOT} minecraft:string`); await sleep(300)
-  bot.chat('/graft book'); await sleep(800)
+  bot.chat('/graft menu'); await sleep(800)
   if (bot.currentWindow) {
-    await bot.clickWindow(15, 0, 0); await sleep(800) // Fate
+    await bot.clickWindow(1, 0, 0); await sleep(800) // Fate
     bot.closeWindow(bot.currentWindow); await sleep(300)
   }
   const drawn = bot.inventory.items().find(i => i.name === 'string')
-  check('the book hands out a thread of the chosen ability', !!drawn && String(drawn.components?.find?.(c => c.type === 'item_model')?.data) === 'grafting:fate')
+  check('the menu hands out a thread of the chosen ability', !!drawn && String(drawn.components?.find?.(c => c.type === 'item_model')?.data) === 'grafting:fate')
   if (drawn) await bot.equip(drawn, 'hand')
   bot.setControlState('sneak', true); await sleep(150)
   bot.swingArm('right'); await sleep(600)
   bot.setControlState('sneak', false)
-  check('sneak + left-click with the thread opens the book too', bookOpen())
+  check('sneak + left-click with the thread opens the menu too', menuOpen())
   if (bot.currentWindow) { bot.closeWindow(bot.currentWindow); await sleep(300) }
   await pickMode('distance')
 

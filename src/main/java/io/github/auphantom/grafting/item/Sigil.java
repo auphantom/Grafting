@@ -20,7 +20,7 @@ import java.util.List;
 
 /**
  * The pathway sigil: the Fool pathway's logo, kept in a fixed inventory slot. Clicking it (in
- * the inventory, or right-clicking with it in hand) opens the pathway book. Its tooltip is the
+ * the inventory, or right-clicking with it in hand) opens the pathway menu. Its tooltip is the
  * "Mystery Arts" readout: pathway, sequence and live stat bars.
  */
 public final class Sigil {
@@ -60,7 +60,7 @@ public final class Sigil {
         item.setItemMeta(meta);
     }
 
-    /** The stat panel shared by the sigil and the portrait in the book. */
+    /** The stat panel shared by the sigil and the portrait in the menu. */
     public static List<Component> readout(Player player, GraftManager grafts, int maxGrafts, boolean hint) {
         List<Graft> owned = grafts.ofOwner(player.getUniqueId());
         Mode selected = selectedMode(player);
@@ -96,7 +96,7 @@ public final class Sigil {
                 .append(Component.text("Thread: ", Bars.GRAY))
                 .append(Component.text(selected == null ? "none in hand" : selected.display(),
                         selected == null ? Bars.GRAY : Bars.color(selected))).build());
-        if (hint) lines.add(Bars.line("Click to open the pathway book", Bars.GRAY));
+        if (hint) lines.add(Bars.line("Click to open the pathway menu", Bars.GRAY));
         return lines;
     }
 

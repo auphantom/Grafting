@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-/** Small pixel-art and zip helpers shared by the icon and book generators. */
+/** Small pixel-art and zip helpers shared by the pack generators. */
 final class Pixels {
 
     /** Item icons are 32x32. */

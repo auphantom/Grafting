@@ -46,7 +46,7 @@ def generatePack = tasks.register('generatePack', JavaExec) {
 // Regenerates the preview images used in the README.
 tasks.register('updateDocs', Copy) {
     group = 'documentation'
-    description = 'Copies the generated icon and book previews into docs/images.'
+    description = 'Copies the generated icon preview into docs/images.'
     dependsOn generatePack
     from(packDir) { include '*.png' }
     into 'docs/images'

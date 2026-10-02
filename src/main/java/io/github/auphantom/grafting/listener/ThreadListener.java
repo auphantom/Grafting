@@ -2,7 +2,7 @@ package io.github.auphantom.grafting.listener;
 
 import io.github.auphantom.grafting.GraftingPlugin;
 import io.github.auphantom.grafting.item.ThreadItem;
-import io.github.auphantom.grafting.ui.PathwayBook;
+import io.github.auphantom.grafting.ui.PathwayMenu;
 import io.github.auphantom.grafting.util.Fx;
 import io.github.auphantom.grafting.util.Text;
 
@@ -64,7 +64,7 @@ public final class ThreadListener implements Listener {
     private final GraftingPlugin plugin;
     private final GraftManager manager;
     private final GraftFactory factory;
-    private PathwayBook book;
+    private PathwayMenu menu;
     private final Map<UUID, Pending> pending = new HashMap<>();
     /** Last tick each player used the thread: one physical click can produce several events. */
     private final Map<UUID, Long> lastUse = new HashMap<>();
@@ -83,8 +83,8 @@ public final class ThreadListener implements Listener {
         this.factory = factory;
     }
 
-    public void setBook(PathwayBook book) {
-        this.book = book;
+    public void setMenu(PathwayMenu menu) {
+        this.menu = menu;
     }
 
     // ------------------------------------------------------------------ switching abilities
@@ -120,7 +120,7 @@ public final class ThreadListener implements Listener {
     private void leftClick(Player player, ItemStack hand) {
         if (debounceSwitch(player)) return;
         if (player.isSneaking()) {
-            book.open(player);
+            menu.open(player);
         } else {
             select(player, hand, ThreadItem.mode(hand).next());
         }
@@ -206,7 +206,7 @@ public final class ThreadListener implements Listener {
         if (!ThreadItem.is(item)) return;
         Mode mode = ThreadItem.mode(item);
         Text.actionBar(event.getPlayer(), mode.tag() + "<b>" + mode.display()
-                + "</b> <dark_gray>·</dark_gray> <gray>left-click to switch, sneak + left-click for the book");
+                + "</b> <dark_gray>·</dark_gray> <gray>left-click to switch, sneak + left-click for the menu");
     }
 
     private boolean recentlyUsed(Player player) {

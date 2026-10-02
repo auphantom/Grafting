@@ -51,44 +51,38 @@ You hold the **Thread of Grafting**. Pick an ability, then right-click two thing
 | Action | Effect |
 |---|---|
 | **Left-click** | Switch to the next ability |
-| **Sneak + left-click** | Open the pathway book |
+| **Sneak + left-click** | Open the pathway menu |
 | **Right-click** | Tie the thread to whatever you're looking at, up to 48 blocks away (block or being) |
 | **Sneak + right-click** | Tie the thread to **yourself** |
 
 | Command | |
 |---|---|
-| `/graft book` | Open the pathway book |
+| `/graft menu` | Open the pathway menu |
 | `/graft give [player]` | Get the Thread of Grafting (op only by default) |
 | `/graft mode <ability>` | Switch ability by name |
 | `/graft list` | Your active grafts and their time left |
 | `/graft sever [id\|all]` | Cut a graft |
 | `/graft pack` | Re-send the texture pack |
 
-Permissions: `grafting.use` (default: everyone), `grafting.take` (draw a thread from the book, default: everyone) and `grafting.give` (default: op).
+Permissions: `grafting.use` (default: everyone), `grafting.take` (draw a thread from the menu, default: everyone) and `grafting.give` (default: op).
 
-## The pathway book
+## The pathway menu
 
-![The pathway book](docs/images/pathway-book.png)
+![The pathway menu](docs/images/pathway-menu.png)
 
 Every player carries the **Fool sigil**, the pathway's emblem, in a fixed inventory slot (top-left by default). It can't be dropped, moved or lost on death. Hovering it shows a live *Mystery Arts* readout: your sequence, threads in use, and the selected ability, with segmented bars.
 
-<p>
-  <img src="docs/images/sigil-tooltip.png" alt="The sigil's Mystery Arts readout" height="260">
-  <img src="docs/images/ability-tooltip.png" alt="An ability page in the book" height="260">
-</p>
+Click the sigil (or right-click while holding it, sneak + left-click with the thread, or `/graft menu`) to open a plain three-row chest menu:
 
-Click the sigil (or right-click while holding it, sneak + left-click with the thread, or `/graft book`) to open the book:
+* **Top row:** the nine abilities. Click one to switch your thread to it (or draw a new thread if you have none).
+* **Middle:** your portrait, with the same Mystery Arts readout.
+* **Bottom row:** your **active grafts**. Hover one to see both ends and its time left, click it to sever it.
 
-* **Left page:** your portrait, sequence and title, a threads counter, and your **active grafts**. Hover one to see both ends and its time left, click it to sever it.
-* **Right page:** the nine abilities. Click one to draw a thread already set to it, shift-click to switch the thread you're holding.
-
-The book is an ordinary chest menu. Its painted pages are a single glyph from a custom font drawn in the window title, positioned with negative-space glyphs, so it needs no client mod. Text is placed on exact pixel rows with a set of shifted fonts, and the whole page is redrawn every second so timers stay live.
+The menu refreshes every second while open, so the timers stay live.
 
 ## Textures
 
-Every ability has its own icon (shown at the top), and the thread in your hand changes to match the selected ability. The icons, the book pages, the sigil, the tooltip frame and the fonts are all drawn by code (the `packgen` source set in `tools/packgen/`) at build time and packed into a resource pack inside the plugin jar. The generator itself is not shipped in the jar.
-
-![The book artwork](docs/images/book.png)
+Every ability has its own icon (shown at the top), and the thread in your hand changes to match the selected ability. The icons, the sigil, the tooltip frame and the bar font are all drawn by code (the `packgen` source set in `tools/packgen/`) at build time and packed into a resource pack inside the plugin jar. The generator itself is not shipped in the jar.
 
 The plugin hosts that pack itself on a small built-in web server (JDK `HttpServer`, port 8164) and offers it to every player who joins, so there's nothing extra to set up. If your players reach the server through a public address, set `resource-pack.public-host`, or upload `grafting-pack.zip` anywhere and set `resource-pack.url`. Without the pack, the thread simply looks like string.
 
@@ -113,7 +107,7 @@ supernova:
   break-blocks: false
 particles:
   density: 1.0           # multiplier for every effect, 0.1 - 4.0
-pathway-book:
+pathway-menu:
   sigil: true            # give every player the sigil and keep it in their inventory
   sigil-slot: 9          # 0-8 hotbar, 9-35 storage
 resource-pack:
@@ -158,10 +152,9 @@ item/
   Sigil             the Fool sigil and its live Mystery Arts tooltip
 listener/
   ThreadListener    clicks -> ability switches, anchors, grafts
-  SigilListener     keeps the sigil in its slot, opens the book
+  SigilListener     keeps the sigil in its slot, opens the menu
 ui/
-  PathwayBook       the book menu: portrait, abilities, active threads
-  GuiTitle Glyphs   draws the painted pages and pixel-placed text into the window title
+  PathwayMenu       the chest menu: abilities, portrait, active threads
   Bars              segmented progress bars
 pack/PackServer     serves the bundled texture pack to players
 command/GraftCommand  /graft
@@ -184,16 +177,16 @@ Some details that took more care than they look:
 * **Death & Return** listens at `HIGHEST` priority and checks `getFinalDamage()` against health plus absorption, so it only triggers on a hit that would *actually* kill.
 * **Nature** effects are short ambient potion pulses refreshed every second, so nothing lingers if the plugin is unloaded mid-graft, and a real potion the being drank is never stripped.
 * The resource pack zip is **reproducible** (fixed timestamps), so its SHA-1 only changes when the icons do and clients don't re-download it every build.
-* **Editing an item while a menu is open.** Changing the held thread from inside the book edits the stack in place, which the client never hears about, so the slot is set again explicitly to push the update.
+* **Editing an item while a menu is open.** Changing the held thread from inside the menu edits the stack in place, which the client never hears about, so the slot is set again explicitly to push the update.
 
 ## Testing
 
-`tests/e2e/` contains an end-to-end test where a real Minecraft client ([mineflayer](https://github.com/PrismarineJS/mineflayer)) joins a live Paper 1.21.11 server running the plugin. It switches abilities the way a player would (left-click, the book, the command) and actually right-clicks blocks and mobs, nearby and at range, to make every kind of graft. The server is driven and inspected over RCON. Among other things it checks:
+`tests/e2e/` contains an end-to-end test where a real Minecraft client ([mineflayer](https://github.com/PrismarineJS/mineflayer)) joins a live Paper 1.21.11 server running the plugin. It switches abilities the way a player would (left-click, the menu, the command) and actually right-clicks blocks and mobs, nearby and at range, to make every kind of graft. The server is driven and inspected over RCON. Among other things it checks:
 
 * left-click cycles abilities, with the item's model following along
 * every player gets the sigil in its slot, with the Mystery Arts tooltip, and it comes back if removed
-* clicking the sigil opens the book (without picking the sigil up), which lists all nine abilities and the portrait, and clicking an ability sets the thread
-* the book hands out a thread of the chosen ability, and sneak + left-click with the thread opens it too
+* clicking the sigil opens the menu (without picking the sigil up), which lists all nine abilities and the portrait, and clicking an ability sets the thread
+* the menu hands out a thread of the chosen ability, and sneak + left-click with the thread opens it too
 * Distance carries players and items both ways, tied to a block 26 blocks away
 * Fate redirects exactly the damage taken, and an A⇄B loop doesn't recurse
 * Volatility explodes once without breaking blocks, and snaps when its TNT is removed
